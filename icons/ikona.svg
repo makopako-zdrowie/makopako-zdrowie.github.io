@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+  <radialGradient id="bg" cx="50%" cy="46%" r="70%"><stop offset="0" stop-color="#0b171c"/><stop offset="1" stop-color="#03070a"/></radialGradient>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="cglow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#2fe3e8" stroke-opacity=".10" stroke-width="1"/></pattern>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<rect width="512" height="512" fill="url(#grid)"/><g fill="none" stroke="#2fe3e8" filter="url(#cglow)">
+  <circle cx="256" cy="256" r="178" stroke-opacity=".55" stroke-width="2"/>
+  <circle cx="256" cy="256" r="196" stroke-opacity=".7" stroke-width="10" stroke-dasharray="1.5 9.75"/>
+  <path d="M256 46v26M256 440v26M46 256h26M440 256h26" stroke-opacity=".8" stroke-width="3"/>
+  <path d="M120 130a190 190 0 0 1 60-56" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M392 382a190 190 0 0 1-60 56" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>
+</g><g fill="none" stroke="#2fe3e8" stroke-opacity=".75" stroke-width="3">
+  <path d="M28 70V28h42M484 70V28h-42M28 442v42h42M484 442v42h-42"/></g>
+<g fill="#2fe3e8" fill-opacity=".45">
+  <rect x="40" y="96" width="34" height="4"/><rect x="40" y="106" width="22" height="4"/><rect x="40" y="116" width="28" height="4"/>
+  <rect x="438" y="392" width="34" height="4"/><rect x="450" y="402" width="22" height="4"/><rect x="444" y="412" width="28" height="4"/>
+</g><g transform="translate(256 256) scale(1) translate(-256 -256)"><path d="M208.0 128.0 L230.0 106.0 L282.0 106.0 L304.0 128.0 L304.0 208.0 L384.0 208.0 L406.0 230.0 L406.0 282.0 L384.0 304.0 L304.0 304.0 L304.0 384.0 L282.0 406.0 L230.0 406.0 L208.0 384.0 L208.0 304.0 L128.0 304.0 L106.0 282.0 L106.0 230.0 L128.0 208.0 L208.0 208.0 Z" fill="#ff2d55" filter="url(#glow)"/>
+<path d="M200 262l40 40 78-86" fill="none" stroke="#03070a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
