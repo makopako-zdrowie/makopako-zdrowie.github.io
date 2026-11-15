@@ -1,0 +1,366 @@
+/* Plik złożony przez narzedzia/skorki.py – nie edytuj ręcznie.
+   Część 1: skin-neon.css z Finansów, bez zmian poza: nazwa skórki, emblemat „Z”, 4 zakładki.
+   Część 2: elementy Zdrowia (narzedzia/skorki/neon.css). */
+/* Skórka „Neon” (v19). Włączana przez <html data-skin="neon"> (skin.js, osobno na każdym urządzeniu).
+   Układ bez zmian – tylko kolory, kroje pisma i kształty. Klasyczny wygląd (styles.css) zostaje nietknięty. */
+html[data-skin="neon"] {
+  --bg: #07070c;
+  --surface: #0d0e16;
+  --surface-2: #171a29;
+  --line: #2b2645;
+  --edge: #3a3160;
+  --grid: #1b1733;
+  --text: #ecfbff;
+  --text-2: #b6c3d6;
+  --muted: #8391a8;
+  --income: #00e5ff;
+  --expense: #ff2a6d;
+  --left: #f3e600;
+  --deficit: #ff2a6d;
+  --good: #39ff88;
+  --warning: #ffb800;
+  --critical: #ff3b5c;
+  --focus: #00e5ff;
+  --y: #f3e600;
+  --c: #00e5ff;
+  --m: #ff2a6d;
+  --cut: 14px;
+  --r-lg: 0px;
+  --r-sm: 0px;
+  --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  --cond: "Rajdhani", "DejaVu Sans Condensed", "Arial Narrow", sans-serif;
+  --left-area: #9d5cff;
+}
+html[data-skin="neon"] *, html[data-skin="neon"] *::before, html[data-skin="neon"] *::after { border-radius: 0 !important; }
+html[data-skin="neon"] .ico, html[data-skin="neon"] .ib .dot { border-radius: 50% !important; }
+
+/* tło: siatka, poświata i linie skanowania */
+html[data-skin="neon"] body {
+  background:
+    radial-gradient(700px 420px at 100% -5%, rgba(255,42,109,.16), transparent 70%),
+    radial-gradient(640px 520px at -10% 85%, rgba(0,229,255,.10), transparent 70%),
+    linear-gradient(rgba(70,60,140,.10) 1px, transparent 1px) 0 0 / 100% 34px,
+    linear-gradient(90deg, rgba(70,60,140,.10) 1px, transparent 1px) 0 0 / 34px 100%,
+    var(--bg);
+  background-attachment: fixed;
+  letter-spacing: .005em;
+}
+html[data-skin="neon"] body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 60;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+}
+html[data-skin="neon"] .num, html[data-skin="neon"] .amt, html[data-skin="neon"] .m-stats b,
+html[data-skin="neon"] .figures .v, html[data-skin="neon"] .sav-points b, html[data-skin="neon"] td.n { font-family: var(--mono); letter-spacing: .02em; }
+
+/* pasek aplikacji */
+html[data-skin="neon"] .appbar { background: rgba(5,5,9,.92); border-bottom: 1px solid rgba(243,230,0,.55); box-shadow: 0 1px 0 rgba(243,230,0,.12), 0 6px 22px rgba(243,230,0,.06); }
+html[data-skin="neon"] .ab-title b { font-family: var(--cond); font-weight: 700; font-size: 19px; text-transform: uppercase; letter-spacing: .16em; color: var(--y);
+  text-shadow: -1.5px 0 rgba(255,42,109,.85), 1.5px 0 rgba(0,229,255,.75); }
+html[data-skin="neon"] .ab-title span { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--c); }
+html[data-skin="neon"] .ab-title span::before { content: '> '; color: var(--m); }
+html[data-skin="neon"] .ib { color: var(--c); }
+html[data-skin="neon"] .ib:hover, html[data-skin="neon"] .ib[aria-current="page"] { background: rgba(0,229,255,.1); color: var(--y); box-shadow: inset 0 0 0 1px rgba(0,229,255,.4); }
+
+/* panele: ścięte rogi, ramka w kolorze krawędzi, żółty znacznik */
+html[data-skin="neon"] .panel, html[data-skin="neon"] .alerts li, html[data-skin="neon"] .sheet {
+  isolation: isolate; background: var(--edge);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+}
+html[data-skin="neon"] .panel::before, html[data-skin="neon"] .alerts li::before, html[data-skin="neon"] .sheet::before {
+  content: ''; position: absolute; inset: 1px; z-index: -1;
+  background: linear-gradient(180deg, rgba(23,26,41,.97), rgba(11,12,19,.97));
+  clip-path: polygon(0 0, calc(100% - var(--cut) + .4px) 0, 100% calc(var(--cut) - .4px), 100% 100%, calc(var(--cut) - .4px) 100%, 0 calc(100% - var(--cut) + .4px));
+}
+html[data-skin="neon"] .panel::after { content: ''; position: absolute; left: 0; top: 0; width: 46px; height: 3px; background: var(--y); box-shadow: 0 0 10px var(--y); }
+html[data-skin="neon"] .panel h2 { font-family: var(--cond); font-size: 17px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--text); }
+html[data-skin="neon"] .panel h2::before { content: '//'; color: var(--m); margin-right: 8px; letter-spacing: 0; }
+html[data-skin="neon"] .panel .desc { color: var(--muted); }
+html[data-skin="neon"] .hero { background: var(--edge); }
+html[data-skin="neon"] .alerts li { background: rgba(255,59,92,.55); }
+html[data-skin="neon"] .alerts li::before { background: linear-gradient(90deg, rgba(60,10,25,.96), rgba(13,14,22,.97) 55%); }
+html[data-skin="neon"] .ico { color: #07070c; box-shadow: 0 0 10px currentColor; }
+html[data-skin="neon"] .ico.critical { box-shadow: 0 0 10px var(--critical); } html[data-skin="neon"] .ico.warning { box-shadow: 0 0 10px var(--warning); }
+
+/* Teraz: miesiąc */
+html[data-skin="neon"] .m-head h1, html[data-skin="neon"] .sub-head h1 { font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 24px; }
+html[data-skin="neon"] .m-head span { font-family: var(--mono); color: var(--c); font-size: 13px; }
+html[data-skin="neon"] .m-label { font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; font-size: 13px; color: var(--muted); }
+html[data-skin="neon"] .m-label::before { content: '■ '; color: var(--y); }
+html[data-skin="neon"] .m-big { font-family: var(--cond); font-weight: 700; letter-spacing: .01em; color: var(--y);
+  text-shadow: 0 0 18px rgba(243,230,0,.45), -2px 0 rgba(255,42,109,.6), 2px 0 rgba(0,229,255,.5); }
+html[data-skin="neon"] .m-big.neg { color: var(--m); text-shadow: 0 0 18px rgba(255,42,109,.5); }
+html[data-skin="neon"] .meter, html[data-skin="neon"] .osz-bar { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); gap: 2px; padding: 2px; height: 18px; }
+html[data-skin="neon"] .meter .sp { background: var(--m); box-shadow: 0 0 10px rgba(255,42,109,.6); }
+html[data-skin="neon"] .meter .rs, html[data-skin="neon"] .k.rs { background: repeating-linear-gradient(135deg, rgba(255,42,109,.6) 0 4px, transparent 4px 8px); }
+html[data-skin="neon"] .meter .lf { background: var(--y); box-shadow: 0 0 12px rgba(243,230,0,.55); }
+html[data-skin="neon"] .m-stats span { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* paski, limity, kategorie */
+html[data-skin="neon"] .track, html[data-skin="neon"] .cat .bar, html[data-skin="neon"] .dblock .bar { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .track > span, html[data-skin="neon"] .cat .bar span, html[data-skin="neon"] .dblock .bar span { box-shadow: 0 0 10px currentColor; }
+html[data-skin="neon"] .months span { background: #262141; }
+html[data-skin="neon"] .months span.warn { background: #8a6a00; } html[data-skin="neon"] .months span.over { background: #9b1d45; }
+html[data-skin="neon"] .months span.now { outline-color: var(--y); }
+html[data-skin="neon"] .limit .name, html[data-skin="neon"] .pay .nm, html[data-skin="neon"] .acc .nm, html[data-skin="neon"] .sa-top .nm { font-family: var(--cond); font-size: 16.5px; font-weight: 700; letter-spacing: .04em; }
+html[data-skin="neon"] .dotc, html[data-skin="neon"] .sw, html[data-skin="neon"] .acc-dot, html[data-skin="neon"] .acc-sw i { box-shadow: 0 0 6px currentColor; }
+
+/* płatności */
+html[data-skin="neon"] .pay .stripe { width: 3px; }
+html[data-skin="neon"] .pay.st-overdue .stripe, html[data-skin="neon"] .pay.st-urgent .stripe { box-shadow: 0 0 10px var(--critical); }
+html[data-skin="neon"] .pay.st-soon .stripe { box-shadow: 0 0 10px var(--warning); }
+html[data-skin="neon"] .pay.st-ok .stripe { background: #3a3160; }
+html[data-skin="neon"] .pay.st-paid .stripe { box-shadow: 0 0 10px var(--good); }
+html[data-skin="neon"] .pay.st-overdue .when b, html[data-skin="neon"] .pay.st-urgent .when b { color: #ff6b8e; }
+html[data-skin="neon"] .pay.st-paid .when b, html[data-skin="neon"] .osz-change .pos, html[data-skin="neon"] .goal-txt .pos, html[data-skin="neon"] .dblock .cmp.down { color: var(--good); }
+
+/* przyciski: żółte ze ściętym rogiem, wielkie litery */
+html[data-skin="neon"] .pay-btn, html[data-skin="neon"] button.save, html[data-skin="neon"] .btn-sm.primary-sm, html[data-skin="neon"] .ab-add, html[data-skin="neon"] .side-add {
+  background: var(--y); color: #07070c; border: 0; font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); box-shadow: 0 0 16px rgba(243,230,0,.35);
+}
+html[data-skin="neon"] button.save { font-size: 17px; }
+html[data-skin="neon"] .pay-btn.ghost, html[data-skin="neon"] .btn-sm {
+  background: transparent; color: var(--c); border: 1px solid rgba(0,229,255,.55); font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; box-shadow: none; clip-path: none;
+}
+html[data-skin="neon"] .btn-sm:hover { background: rgba(0,229,255,.1); }
+html[data-skin="neon"] .edit, html[data-skin="neon"] .linkish { color: var(--c); text-decoration-color: rgba(0,229,255,.45); }
+html[data-skin="neon"] .danger { color: #ff6b8e; border-color: rgba(255,42,109,.5); }
+
+/* przełączniki, chipy, zakładki */
+html[data-skin="neon"] .seg, html[data-skin="neon"] .seg-sm { background: #07070c; box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .seg button[aria-pressed="true"], html[data-skin="neon"] .seg-sm button[aria-pressed="true"] { background: rgba(0,229,255,.14); color: var(--c); box-shadow: inset 0 -2px 0 var(--c); }
+html[data-skin="neon"] .seg button, html[data-skin="neon"] .seg-sm button, html[data-skin="neon"] .tabs button, html[data-skin="neon"] .dates button, html[data-skin="neon"] .chips button { font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+html[data-skin="neon"] .tabs button, html[data-skin="neon"] .dates button, html[data-skin="neon"] .chips button { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .tabs button[aria-pressed="true"], html[data-skin="neon"] .dates button[aria-pressed="true"] { background: var(--y); color: #07070c; box-shadow: 0 0 12px rgba(243,230,0,.4); }
+html[data-skin="neon"] .chips button[aria-pressed="true"], html[data-skin="neon"] .quick button[aria-pressed="true"] { background: rgba(0,229,255,.12); border-color: var(--c); color: var(--text); box-shadow: 0 0 12px rgba(0,229,255,.3); }
+html[data-skin="neon"] .quick button { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); font-family: var(--cond); font-size: 15px; letter-spacing: .04em; }
+html[data-skin="neon"] .tabs-arrow.l { background: linear-gradient(90deg, #0f1019 55%, transparent); }
+html[data-skin="neon"] .tabs-arrow.r { background: linear-gradient(270deg, #0f1019 55%, transparent); }
+
+/* pola formularza */
+html[data-skin="neon"] .field select, html[data-skin="neon"] .field input, html[data-skin="neon"] .search-in, html[data-skin="neon"] .num-in, html[data-skin="neon"] .bal-row input, html[data-skin="neon"] .dates input, html[data-skin="neon"] .amount {
+  background: #05050a; border-color: var(--line); font-family: var(--mono);
+}
+html[data-skin="neon"] .amount:focus-within, html[data-skin="neon"] .field input:focus, html[data-skin="neon"] .search-in:focus { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 14px rgba(0,229,255,.3); outline: none; }
+html[data-skin="neon"] .amount input { font-family: var(--cond); color: var(--y); text-shadow: 0 0 12px rgba(243,230,0,.35); }
+html[data-skin="neon"] .field > span, html[data-skin="neon"] .dsum span, html[data-skin="neon"] .sav-points span { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+html[data-skin="neon"] .dsum div, html[data-skin="neon"] .sav-points div, html[data-skin="neon"] .pay-ctx, html[data-skin="neon"] .dnote, html[data-skin="neon"] .income-note, html[data-skin="neon"] .edit-note, html[data-skin="neon"] .pair-box { background: rgba(5,5,10,.8); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* arkusz od dołu */
+html[data-skin="neon"] .sheet::after { content: ''; position: absolute; left: 0; right: var(--cut); top: 0; height: 2px; background: var(--y); box-shadow: 0 0 12px var(--y); }
+html[data-skin="neon"] .sheet-bg { background: rgba(3,2,8,.72); }
+html[data-skin="neon"] .sheet-head h2 { font-family: var(--cond); text-transform: uppercase; letter-spacing: .1em; font-size: 20px; }
+html[data-skin="neon"] .x { background: transparent; color: var(--m); box-shadow: inset 0 0 0 1px rgba(255,42,109,.6); }
+html[data-skin="neon"] .grab { background: var(--y); opacity: .7; }
+
+/* dolne menu */
+html[data-skin="neon"] .tabbar { background: rgba(4,4,8,.96); border-top: 1px solid rgba(243,230,0,.5); box-shadow: 0 -6px 22px rgba(243,230,0,.06); }
+html[data-skin="neon"] .tabbar button { font-size: 11.5px; font-weight: 600; letter-spacing: 0; min-width: 0; color: #6f7a90; }
+html[data-skin="neon"] .tabbar button[aria-current="page"] { color: var(--y); text-shadow: 0 0 10px rgba(243,230,0,.6); }
+html[data-skin="neon"] .tabbar button[aria-current="page"] svg { color: var(--y); filter: drop-shadow(0 0 6px rgba(243,230,0,.7)); }
+html[data-skin="neon"] .tabbar .tb-add { color: var(--y); }
+html[data-skin="neon"] .tabbar .tb-add svg { background: var(--y); color: #07070c; box-shadow: none; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); width: 54px; padding: 12px 15px; filter: drop-shadow(0 0 10px rgba(243,230,0,.6)); }
+
+/* wykresy i chmurki */
+html[data-skin="neon"] .tip, html[data-skin="neon"] .sav-chart .tip { background: rgba(5,5,10,.95); border: 1px solid var(--c); box-shadow: 0 0 18px rgba(0,229,255,.25); font-family: var(--mono); }
+html[data-skin="neon"] .tip .t { color: var(--y); text-transform: uppercase; letter-spacing: .06em; }
+html[data-skin="neon"] .sbar span { box-shadow: 0 0 8px currentColor; }
+html[data-skin="neon"] .goal-tick { background: var(--c); box-shadow: 0 0 10px var(--c); }
+html[data-skin="neon"] .goal-pct { color: var(--c) !important; text-shadow: 0 0 10px rgba(0,229,255,.5); }
+
+/* drobne kolory */
+html[data-skin="neon"] .tag.tg-role, html[data-skin="neon"] .tag.tg-man { color: var(--c); border-color: rgba(0,229,255,.45); }
+html[data-skin="neon"] .tag.tg-auto { color: #d49bff; border-color: rgba(200,107,255,.5); }
+html[data-skin="neon"] .tag.tg-in, html[data-skin="neon"] .subs .tag { color: var(--good); border-color: rgba(57,255,136,.45); }
+html[data-skin="neon"] .badge { color: var(--c); background: rgba(0,229,255,.12); }
+html[data-skin="neon"] details.paid-more > summary small, html[data-skin="neon"] .status-chip { background: rgba(243,230,0,.12); color: var(--y); font-family: var(--mono); }
+html[data-skin="neon"] .toast { background: #05050a; color: var(--text); border: 1px solid var(--y); box-shadow: 0 0 18px rgba(243,230,0,.3); }
+html[data-skin="neon"] .toast button { background: var(--y); color: #07070c; }
+html[data-skin="neon"] footer, html[data-skin="neon"] .total { font-family: var(--mono); font-size: 12.5px; }
+html[data-skin="neon"] .sub-ask { border: 0; }
+html[data-skin="neon"] .log .c b { font-family: var(--cond); font-size: 16px; letter-spacing: .03em; }
+html[data-skin="neon"] .log .a { font-family: var(--mono); color: var(--y); }
+
+html[data-skin="neon"] .panel, html[data-skin="neon"] .alerts li { position: relative; }
+
+/* szerokości na telefonie (wielkie litery są szersze) */
+html[data-skin="neon"] .ab-title span { font-size: 11.5px; letter-spacing: .01em; }
+html[data-skin="neon"] .btn-sm, html[data-skin="neon"] .pay-btn.ghost { letter-spacing: .04em; padding: 6px 10px; }
+html[data-skin="neon"] .seg button, html[data-skin="neon"] .tabs button, html[data-skin="neon"] .dates button, html[data-skin="neon"] .chips button { letter-spacing: .03em; }
+html[data-skin="neon"] .seg-sm { max-width: 100%; }
+html[data-skin="neon"] .seg-sm button { font-size: 13px; letter-spacing: 0; padding-left: 7px; padding-right: 7px; }
+html[data-skin="neon"] .tabbar { padding-left: 0; padding-right: 0; }
+html[data-skin="neon"] .months span.warn { background: #a88b00; }
+@media (min-width: 900px) {
+  html[data-skin="neon"] .tabbar { background: none; border: 0; box-shadow: none; }
+  html[data-skin="neon"] .tabbar button { font-size: 14px; font-family: var(--cond); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  html[data-skin="neon"] .tabbar button[aria-current="page"] { background: rgba(243,230,0,.1); box-shadow: inset 0 -2px 0 var(--y); }
+  html[data-skin="neon"] .appbar { background: rgba(5,5,9,.88); }
+}
+
+/* emblemat: własny znak aplikacji (sześciokąt z „Z”), bardzo przygaszony, jak hologram nad treścią */
+html[data-skin="neon"] body::before {
+  content: ''; position: fixed; right: -30px; bottom: 100px; width: 210px; height: 242px; pointer-events: none; z-index: 59;
+  background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 230'%3E%3Cg opacity='.05'%3E%3Cg fill='none' stroke='%23f3e600' stroke-width='5'%3E%3Cpath d='M100 6 190 58v104l-90 52-90-52V58z'/%3E%3Cpath d='M100 26 172 68v84l-72 42-72-42V68z' stroke-width='2' stroke-dasharray='10 6'/%3E%3C/g%3E%3Cpath fill='%23f3e600' d='M66 62h76v14l-52 75h52v16H62v-14l52-75H66z'/%3E%3Cpath fill='%2300e5ff' d='M70 176h60l-8 12H78z'/%3E%3C/g%3E%3C/svg%3E");
+}
+@media (min-width: 900px) { html[data-skin="neon"] body::before { right: 28px; bottom: 28px; width: 240px; height: 276px; } }
+
+/* karta wyboru wyglądu w Neonie */
+html[data-skin="neon"] .skin { background: #05050a; }
+html[data-skin="neon"] .skin b { font-family: var(--cond); text-transform: uppercase; letter-spacing: .1em; }
+html[data-skin="neon"] .skin[aria-pressed="true"] { border-color: var(--y); box-shadow: 0 0 0 1px var(--y), 0 0 16px rgba(243,230,0,.25); }
+html[data-skin="neon"] .skin[aria-pressed="true"]::after { background: var(--y); color: #07070c; }
+@media (max-width: 400px) {
+  html[data-skin="neon"] .seg-sm button { white-space: normal; line-height: 1.15; font-size: 12.5px; padding-left: 6px; padding-right: 6px; }
+}
+@media (max-width: 400px) { html[data-skin="neon"] .tabbar button { font-size: 11px; } html[data-skin="neon"] .tabbar .tb-add svg { width: 50px; padding: 12px 13px; } }
+html[data-skin="neon"] .tax .row, html[data-skin="neon"] .goal-row, html[data-skin="neon"] .loan-row { flex-wrap: wrap; column-gap: 10px; }
+
+/* wykres Struktura jak świetlówki: przygaszone wnętrze, jasny obrys, poświata, linie skanowania, włączanie z migotaniem */
+html[data-skin="neon"] .chart .seg { fill-opacity: .2; stroke-width: 1.4; filter: drop-shadow(0 0 2.5px currentColor) drop-shadow(0 0 7px currentColor); transition: fill-opacity .2s; }
+html[data-skin="neon"] .chart .scol:hover .seg { fill-opacity: .34; }
+html[data-skin="neon"] .chart .tex { mix-blend-mode: screen; }
+html[data-skin="neon"] .chart .scol text { font-family: var(--mono); fill: #ecfbff; filter: drop-shadow(0 0 4px rgba(0,229,255,.7)); }
+html[data-skin="neon"] .chart path[stroke="var(--text)"] { stroke: #ecfbff; filter: drop-shadow(0 0 3px rgba(0,229,255,.9)) drop-shadow(0 0 8px rgba(0,229,255,.5)); }
+html[data-skin="neon"] .chart circle[fill="var(--text)"] { fill: #ecfbff; filter: drop-shadow(0 0 4px #00e5ff); }
+html[data-skin="neon"] .legend .sw { box-shadow: 0 0 6px currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="neon"] .chart .scol.boot { animation: neonTubeOn 1.1s linear backwards; animation-delay: calc(.35s + var(--i) * 70ms); }
+}
+@keyframes neonTubeOn { 0% { opacity: .08; } 8% { opacity: .9; } 12% { opacity: .15; } 22% { opacity: 1; } 27% { opacity: .35; } 34% { opacity: 1; } 100% { opacity: 1; } }
+
+/* Bilans: linie jak świetlówki, pole z liniami skanowania */
+html[data-skin="neon"] .chart path[stroke="var(--income)"] { filter: drop-shadow(0 0 2.5px var(--income)) drop-shadow(0 0 8px var(--income)); }
+html[data-skin="neon"] .chart path[stroke="var(--expense)"] { filter: drop-shadow(0 0 2.5px var(--expense)) drop-shadow(0 0 8px var(--expense)); }
+html[data-skin="neon"] .chart circle[fill="var(--income)"] { filter: drop-shadow(0 0 4px var(--income)); }
+html[data-skin="neon"] .chart circle[fill="var(--expense)"] { filter: drop-shadow(0 0 4px var(--expense)); }
+html[data-skin="neon"] .chart .tex, html[data-skin="neon"] .sav-chart .tex { mix-blend-mode: screen; pointer-events: none; }
+
+/* Oszczędności: pola kont jako świecące tafle, linie prognozy, celu i długu z poświatą */
+html[data-skin="neon"] .sav-chart .nb { fill-opacity: .2; stroke-width: 1.3; stroke-linejoin: round; filter: drop-shadow(0 0 2.5px currentColor) drop-shadow(0 0 6px currentColor); }
+html[data-skin="neon"] .sav-chart path[stroke="var(--left)"] { filter: drop-shadow(0 0 3px var(--left)) drop-shadow(0 0 8px var(--left)); }
+html[data-skin="neon"] .sav-chart circle[fill="var(--left)"] { filter: drop-shadow(0 0 4px var(--left)); }
+html[data-skin="neon"] .sav-chart line[stroke="var(--warning)"] { filter: drop-shadow(0 0 4px var(--warning)); }
+html[data-skin="neon"] .sav-chart line[stroke="#7fb4f5"] { stroke: var(--c); filter: drop-shadow(0 0 4px var(--c)); }
+html[data-skin="neon"] .sav-chart text[fill="#7fb4f5"] { fill: var(--c); }
+html[data-skin="neon"] .sav-chart path[fill="var(--left-area)"] { opacity: .22; }
+
+/* paski (limity, kategorie, struktura miesiąca, raty, cel): rurki – przygaszone wnętrze, jasny obrys, poświata, segmenty */
+html[data-skin="neon"] :is(.track > span, .cat .bar span, .dblock .bar span, .sbar span, .osz-bar span, .meter .sp, .meter .lf) {
+  background-image: repeating-linear-gradient(90deg, rgba(7,7,12,.5) 0 1px, transparent 1px 4px), linear-gradient(rgba(7,7,12,.4), rgba(7,7,12,.4)) !important;
+  box-shadow: inset 0 0 0 1px currentColor, 0 0 5px currentColor, 0 0 14px -3px currentColor !important;
+}
+html[data-skin="neon"] .meter .sp { color: var(--m); }
+html[data-skin="neon"] .meter .lf { color: var(--y); }
+html[data-skin="neon"] :is(.track, .cat .bar, .dblock .bar, .sbar, .osz-bar, .meter) { overflow: visible; }
+html[data-skin="neon"] .cat .bar, html[data-skin="neon"] .dblock .bar { height: 8px; }
+html[data-skin="neon"] .sbar { gap: 2px; }
+html[data-skin="neon"] .osz-bar { gap: 3px; }
+html[data-skin="neon"] .track > u { background: #ecfbff; box-shadow: 0 0 6px #ecfbff; }
+html[data-skin="neon"] .months span { box-shadow: inset 0 0 0 1px rgba(140,107,255,.35); }
+html[data-skin="neon"] .months span.warn { background: rgba(255,184,0,.35); box-shadow: inset 0 0 0 1px #ffb800, 0 0 6px #ffb800; }
+html[data-skin="neon"] .months span.over { background: rgba(255,42,109,.35); box-shadow: inset 0 0 0 1px #ff2a6d, 0 0 6px #ff2a6d; }
+html[data-skin="neon"] .months span.now { outline: 1px solid var(--y); outline-offset: 1px; }
+
+/* ======================= Zdrowie ======================= */
+/* Elementy Zdrowia w Neonie: zmienne Zdrowia, karty pór, wiersze do odhaczenia, „Wziąłeś?”, kratki, zapasy.
+   Wspólne elementy (panele, przyciski, okna, menu, toast, alerty, górna karta .month) są wyżej, z Finansów. */
+html[data-skin="neon"] {
+  --accent: #00e5ff;
+  --accent-ink: #07070c;
+  --accent-bg: rgba(0,229,255,.08);
+  --skip: #ff2a6d;
+  --skip-bg: rgba(255,42,109,.1);
+  --bar-bg: rgba(4,4,8,.96);
+  --sync-bg: #0d0e16;
+  --late-bg: #0d0e16;
+  --late-line: #3a3160;
+  --toast-bg: #05050a;
+  --toast-text: #ecfbff;
+  --shade: rgba(3,2,8,.72);
+  --k-ok: #00e5ff; --k-czesc: #8c6bff; --k-pom: #ff2a6d; --k-brak: #3b3b55; --k-dor: #f3e600; --k-none: #12121e;
+}
+html[data-skin="neon"] .card { border-radius: 0; }
+
+/* Dziś: wszystko odhaczone – licznik w turkusie */
+html[data-skin="neon"] .m-big.done { color: var(--c); text-shadow: 0 0 18px rgba(0,229,255,.5), -2px 0 rgba(255,42,109,.6), 2px 0 rgba(243,230,0,.4); }
+
+/* ostatnie 7 dni */
+html[data-skin="neon"] .week7 { background: #0b0c14; box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .w7t { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+html[data-skin="neon"] .w7t b { color: var(--y); }
+html[data-skin="neon"] .d7 { background: #12121e; box-shadow: inset 0 0 0 1px #2b2645; }
+html[data-skin="neon"] .d7 i { font-family: var(--mono); font-size: 10px; }
+html[data-skin="neon"] .d7.st-ok, html[data-skin="neon"] .d7.st-czesc, html[data-skin="neon"] .d7.st-pom { box-shadow: inset 0 0 0 1px currentColor, 0 0 8px currentColor; }
+html[data-skin="neon"] .d7.st-ok { color: var(--c); background: rgba(0,229,255,.28); }
+html[data-skin="neon"] .d7.st-czesc { color: #8c6bff; background: rgba(140,107,255,.3); }
+html[data-skin="neon"] .d7.st-pom { color: var(--m); background: rgba(255,42,109,.3); }
+html[data-skin="neon"] .d7.st-ok i, html[data-skin="neon"] .d7.st-czesc i, html[data-skin="neon"] .d7.st-pom i { color: #ecfbff; }
+html[data-skin="neon"] .d7.today { outline: 1px solid var(--y); outline-offset: 1px; box-shadow: none; }
+
+/* karta pory dnia */
+html[data-skin="neon"] .card-head .when { color: var(--c); font-family: var(--mono); }
+html[data-skin="neon"] .card-head .cnt, html[data-skin="neon"] details.card > summary .cnt { color: var(--y); font-family: var(--mono); }
+html[data-skin="neon"] details.card.done > summary .cnt { color: var(--c); }
+html[data-skin="neon"] details.card > summary::after { border-color: var(--c); }
+html[data-skin="neon"] .okmark { background: var(--c); color: #07070c; box-shadow: 0 0 10px var(--c); }
+
+/* „Wziąłeś?” jak „Pobrało się?” w Finansach */
+html[data-skin="neon"] .late::after { background: var(--m); box-shadow: 0 0 10px var(--m); }
+html[data-skin="neon"] .late-g h3 { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--c); }
+html[data-skin="neon"] .late-i { background: #0b0c14; box-shadow: inset 0 0 0 1px var(--line), -3px 0 10px -4px var(--tc, var(--c)); border-left-width: 3px; }
+html[data-skin="neon"] .late-i .q b { font-family: var(--cond); font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+
+/* pozycja do odhaczenia: rurka z poświatą w kolorze terapii */
+html[data-skin="neon"] .item { background: #0b0c14; border-left-width: 3px; box-shadow: inset 0 0 0 1px var(--line), -3px 0 10px -4px var(--tc, var(--c)); }
+html[data-skin="neon"] .it-txt b { font-family: var(--cond); font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+html[data-skin="neon"] .it-txt em, html[data-skin="neon"] .it-txt small { font-family: var(--mono); font-size: 12px; letter-spacing: .02em; }
+html[data-skin="neon"] .chk { border-color: #4a4470; }
+html[data-skin="neon"] .item.st-wziete { background: rgba(0,229,255,.06); }
+html[data-skin="neon"] .item.st-wziete .chk { background: var(--c); border-color: var(--c); color: #07070c; box-shadow: 0 0 12px rgba(0,229,255,.7); }
+html[data-skin="neon"] .item.st-wziete .it-txt em { color: var(--c); }
+html[data-skin="neon"] .item.st-pominiete .chk { border-color: var(--m); color: var(--m); box-shadow: 0 0 10px rgba(255,42,109,.5); }
+html[data-skin="neon"] .it-more { color: var(--c); border-left-color: var(--line); }
+html[data-skin="neon"] .it-more.undo[data-armed] { color: var(--y); font-family: var(--cond); text-transform: uppercase; letter-spacing: .06em; }
+html[data-skin="neon"] .ic { filter: drop-shadow(0 0 4px currentColor); }
+@keyframes neonPop { 0% { transform: scale(.6); opacity: .2; } 30% { opacity: 1; } 45% { opacity: .4; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+html[data-skin="neon"] .item.just .chk { animation: neonPop .45s linear; }
+html[data-skin="neon"] .btn-sm.yes { color: var(--y); border-color: rgba(243,230,0,.6); }
+
+/* formularze Zdrowia */
+html[data-skin="neon"] .pora-row input, html[data-skin="neon"] .qty label { background: #05050a; border-color: var(--line); font-family: var(--mono); }
+html[data-skin="neon"] .qty label:focus-within { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 14px rgba(0,229,255,.3); }
+html[data-skin="neon"] .qty input { font-family: var(--cond); color: var(--y); text-shadow: 0 0 12px rgba(243,230,0,.35); }
+html[data-skin="neon"] .qty button { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); color: var(--c); }
+html[data-skin="neon"] .pora-row label span { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+html[data-skin="neon"] .sh-state, html[data-skin="neon"] .stock { background: rgba(5,5,10,.8); box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .sh-h { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--c); }
+
+/* Terapie i zapasy */
+html[data-skin="neon"] .track > span { color: var(--tc, var(--c)); }
+html[data-skin="neon"] .stock.low .track > span { color: var(--warning); background-color: var(--warning); }
+html[data-skin="neon"] .th-head i { box-shadow: 0 0 8px var(--tc, var(--c)); }
+html[data-skin="neon"] .pos .nm b { font-family: var(--cond); font-size: 17px; letter-spacing: .04em; }
+html[data-skin="neon"] .badge.plan { color: var(--y); background: rgba(243,230,0,.12); }
+
+/* Historia: kratki */
+html[data-skin="neon"] .cal-h { font-family: var(--mono); color: var(--c); }
+html[data-skin="neon"] .cal-nav b { font-family: var(--cond); text-transform: uppercase; letter-spacing: .12em; color: var(--y); }
+html[data-skin="neon"] .cal-d { font-family: var(--mono); background: #12121e; box-shadow: inset 0 0 0 1px #24203c; }
+html[data-skin="neon"] .cal-d.st-ok, html[data-skin="neon"] .cal-d.st-czesc, html[data-skin="neon"] .cal-d.st-pom { box-shadow: inset 0 0 0 1px currentColor, 0 0 8px -2px currentColor; }
+html[data-skin="neon"] .cal-d.st-ok { color: var(--c); background: rgba(0,229,255,.22); }
+html[data-skin="neon"] .cal-d.st-czesc { color: #8c6bff; background: rgba(140,107,255,.25); }
+html[data-skin="neon"] .cal-d.st-pom { color: var(--m); background: rgba(255,42,109,.25); }
+html[data-skin="neon"] .cal-d.st-ok span, html[data-skin="neon"] .cal-d.st-czesc span, html[data-skin="neon"] .cal-d.st-pom span { color: #ecfbff; }
+html[data-skin="neon"] .cal-d.st-fut, html[data-skin="neon"] .cal-d.st-none { background: transparent; box-shadow: none; }
+html[data-skin="neon"] .cal-d[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--y), 0 0 14px rgba(243,230,0,.5); }
+html[data-skin="neon"] .cal-sum, html[data-skin="neon"] .cal-leg { font-family: var(--mono); font-size: 12px; }
+html[data-skin="neon"] .cal-sum b { color: var(--y); }
+html[data-skin="neon"] .hrow b { font-family: var(--cond); font-size: 16.5px; letter-spacing: .04em; }
+html[data-skin="neon"] .hrow small { font-family: var(--mono); font-size: 12px; }
+
+/* drobne */
+html[data-skin="neon"] details.more > summary { font-family: var(--cond); text-transform: uppercase; letter-spacing: .08em; color: var(--c); }
+html[data-skin="neon"] .empty b, html[data-skin="neon"] .setup h1 { font-family: var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--y); }
+html[data-skin="neon"] .choice { background: #0b0c14; border-color: var(--line); }

@@ -1,0 +1,88 @@
+/* Elementy Zdrowia w Racerze: zmienne Zdrowia, karty pór, wiersze do odhaczenia, „Wziąłeś?”, kratki, zapasy.
+   Wspólne elementy (panele, przyciski, okna, menu, toast, alerty, górna karta .month jako plakat) są wyżej, z Finansów. */
+html[data-skin="racer"] {
+  --accent: #2e5662;
+  --accent-ink: #f3eee4;
+  --accent-bg: rgba(46,86,98,.1);
+  --skip: #d9542b;
+  --skip-bg: rgba(217,84,43,.1);
+  --bar-bg: #24474f;
+  --sync-bg: #f0ece3;
+  --late-bg: rgba(248,246,240,.95);
+  --late-line: #d9542b;
+  --toast-bg: #24474f;
+  --toast-text: #f3eee4;
+  --shade: rgba(31,61,71,.42);
+  --k-ok: #2e5662; --k-czesc: #e3a33a; --k-pom: #d9542b; --k-brak: #b5ab98; --k-dor: #6b9aa6; --k-none: #e2ddd1;
+}
+
+/* Dziś: plakat – miejsce na pasy z prawej i ostatnie 7 dni w środku */
+html[data-skin="racer"] .month.hero-d { padding-right: 84px; }
+html[data-skin="racer"] .m-big.done { color: var(--cream); }
+html[data-skin="racer"] .hero-d .week7 { background: rgba(0,0,0,.18); flex-wrap: wrap; }
+html[data-skin="racer"] .hero-d .w7t { color: #cfe0e2; text-align: left; }
+html[data-skin="racer"] .hero-d .w7t b { color: #f0c27a; }
+html[data-skin="racer"] .hero-d .d7 { background: rgba(243,238,228,.14); }
+html[data-skin="racer"] .hero-d .d7 i { color: #cfe0e2; }
+html[data-skin="racer"] .hero-d .d7.st-ok { background: #f3eee4; } html[data-skin="racer"] .hero-d .d7.st-ok i { color: #1f3d47; }
+html[data-skin="racer"] .hero-d .d7.st-czesc { background: #e3a33a; } html[data-skin="racer"] .hero-d .d7.st-czesc i { color: #1f3d47; }
+html[data-skin="racer"] .hero-d .d7.st-pom { background: #d9542b; } html[data-skin="racer"] .hero-d .d7.st-pom i { color: #fff; }
+html[data-skin="racer"] .hero-d .d7.today { box-shadow: 0 0 0 2px #f0c27a; }
+html[data-skin="racer"] .d7.st-ok i, html[data-skin="racer"] .d7.st-pom i { color: #fff; }
+
+/* karta pory dnia */
+html[data-skin="racer"] .card-head .when { color: var(--orange); font-weight: 700; }
+html[data-skin="racer"] .card-head .cnt, html[data-skin="racer"] details.card > summary .cnt { font-family: var(--wide); font-stretch: 118%; font-weight: 800; color: var(--teal-2); }
+html[data-skin="racer"] details.card.done > summary .cnt { color: var(--good); }
+html[data-skin="racer"] .okmark { background: var(--teal-2); color: var(--cream); }
+
+/* „Wziąłeś?” jak „Pobrało się?” w Finansach */
+html[data-skin="racer"] .late-g h3 { font-family: var(--wide); font-stretch: 112%; font-weight: 800; text-transform: uppercase; font-size: 12.5px; color: var(--orange); letter-spacing: .03em; }
+html[data-skin="racer"] .late-g + .late-g { border-top-color: rgba(31,61,71,.14); }
+html[data-skin="racer"] .late-i { background: #fbf9f4; box-shadow: inset 0 0 0 1.5px rgba(31,61,71,.12); }
+html[data-skin="racer"] .late-i .q b { font-family: var(--wide); font-stretch: 112%; font-weight: 800; }
+
+/* pozycja do odhaczenia */
+html[data-skin="racer"] .item { background: #fbf9f4; box-shadow: inset 0 0 0 1.5px rgba(31,61,71,.12); border-left-width: 5px; }
+html[data-skin="racer"] .it-txt b { font-family: var(--wide); font-stretch: 112%; font-weight: 800; letter-spacing: .01em; }
+html[data-skin="racer"] .chk { border-color: rgba(31,61,71,.35); border-width: 2.5px; }
+html[data-skin="racer"] .item.st-wziete { background: rgba(46,86,98,.08); }
+html[data-skin="racer"] .item.st-wziete .chk { background: var(--teal-2); border-color: var(--teal-2); color: var(--cream); }
+html[data-skin="racer"] .item.st-wziete .it-txt em { color: var(--teal-2); }
+html[data-skin="racer"] .item.st-pominiete { background: rgba(217,84,43,.07); }
+html[data-skin="racer"] .item.st-pominiete .chk { border-color: var(--orange); color: var(--orange); }
+html[data-skin="racer"] .it-more { color: var(--teal); border-left-color: rgba(31,61,71,.1); }
+html[data-skin="racer"] button.all { border-color: var(--orange); color: var(--orange); }
+html[data-skin="racer"] .btn-sm.yes { color: var(--teal-2); border-color: var(--teal-2); }
+
+/* formularze Zdrowia */
+html[data-skin="racer"] .pora-row input, html[data-skin="racer"] .qty label { background: #fbf9f4; color: var(--text); border: 1.5px solid rgba(31,61,71,.2); }
+html[data-skin="racer"] .qty label:focus-within { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(217,84,43,.15); }
+html[data-skin="racer"] .qty input { color: var(--text); font-family: var(--wide); font-stretch: 118%; font-weight: 900; }
+html[data-skin="racer"] .qty button { background: #e2ddd1; color: var(--teal); }
+html[data-skin="racer"] .sh-state, html[data-skin="racer"] .stock { background: #efebe2; }
+html[data-skin="racer"] .sh-h { font-family: var(--wide); font-stretch: 112%; font-weight: 800; text-transform: uppercase; font-size: 12.5px; color: var(--orange); }
+
+/* Terapie i zapasy */
+html[data-skin="racer"] .track > span { background: var(--teal-2) !important; }
+html[data-skin="racer"] .stock.low .track > span { background: var(--orange) !important; }
+html[data-skin="racer"] .pos .nm b, html[data-skin="racer"] .hrow b { font-family: var(--wide); font-stretch: 112%; font-weight: 800; }
+html[data-skin="racer"] .th-head h2 { font-family: var(--wide); font-stretch: 125%; font-weight: 900; text-transform: uppercase; }
+html[data-skin="racer"] .badge.plan { background: var(--mustard); color: var(--text); }
+html[data-skin="racer"] .badge.end { background: #cfc8b9; color: var(--text-2); }
+
+/* Historia: kratki */
+html[data-skin="racer"] .cal-h { color: var(--orange); font-family: var(--wide); font-stretch: 112%; text-transform: uppercase; }
+html[data-skin="racer"] .cal-nav b { font-family: var(--wide); font-stretch: 125%; font-weight: 900; text-transform: uppercase; }
+html[data-skin="racer"] .cal-d { background: #e2ddd1; font-family: var(--wide); font-stretch: 112%; }
+html[data-skin="racer"] .cal-d.st-ok { background: var(--teal-2); } html[data-skin="racer"] .cal-d.st-ok span { color: var(--cream); }
+html[data-skin="racer"] .cal-d.st-czesc { background: var(--mustard); } html[data-skin="racer"] .cal-d.st-czesc span { color: var(--text); }
+html[data-skin="racer"] .cal-d.st-pom { background: var(--orange); } html[data-skin="racer"] .cal-d.st-pom span { color: #fff; }
+html[data-skin="racer"] .cal-d.st-brak { background: #b5ab98; }
+html[data-skin="racer"] .cal-d.st-fut, html[data-skin="racer"] .cal-d.st-none { background: transparent; }
+html[data-skin="racer"] .cal-d[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--orange); }
+
+/* drobne */
+html[data-skin="racer"] details.more > summary { font-family: var(--wide); font-stretch: 112%; font-weight: 800; text-transform: uppercase; font-size: 12.5px; }
+html[data-skin="racer"] .empty b, html[data-skin="racer"] .setup h1 { font-family: var(--wide); font-stretch: 125%; font-weight: 900; text-transform: uppercase; }
+html[data-skin="racer"] .choice { background: #fbf9f4; border: 1.5px solid rgba(31,61,71,.18); }

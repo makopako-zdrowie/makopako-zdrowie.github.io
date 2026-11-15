@@ -1,0 +1,100 @@
+/* Elementy Zdrowia w Neonie: zmienne Zdrowia, karty pór, wiersze do odhaczenia, „Wziąłeś?”, kratki, zapasy.
+   Wspólne elementy (panele, przyciski, okna, menu, toast, alerty, górna karta .month) są wyżej, z Finansów. */
+html[data-skin="neon"] {
+  --accent: #00e5ff;
+  --accent-ink: #07070c;
+  --accent-bg: rgba(0,229,255,.08);
+  --skip: #ff2a6d;
+  --skip-bg: rgba(255,42,109,.1);
+  --bar-bg: rgba(4,4,8,.96);
+  --sync-bg: #0d0e16;
+  --late-bg: #0d0e16;
+  --late-line: #3a3160;
+  --toast-bg: #05050a;
+  --toast-text: #ecfbff;
+  --shade: rgba(3,2,8,.72);
+  --k-ok: #00e5ff; --k-czesc: #8c6bff; --k-pom: #ff2a6d; --k-brak: #3b3b55; --k-dor: #f3e600; --k-none: #12121e;
+}
+html[data-skin="neon"] .card { border-radius: 0; }
+
+/* Dziś: wszystko odhaczone – licznik w turkusie */
+html[data-skin="neon"] .m-big.done { color: var(--c); text-shadow: 0 0 18px rgba(0,229,255,.5), -2px 0 rgba(255,42,109,.6), 2px 0 rgba(243,230,0,.4); }
+
+/* ostatnie 7 dni */
+html[data-skin="neon"] .week7 { background: #0b0c14; box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .w7t { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+html[data-skin="neon"] .w7t b { color: var(--y); }
+html[data-skin="neon"] .d7 { background: #12121e; box-shadow: inset 0 0 0 1px #2b2645; }
+html[data-skin="neon"] .d7 i { font-family: var(--mono); font-size: 10px; }
+html[data-skin="neon"] .d7.st-ok, html[data-skin="neon"] .d7.st-czesc, html[data-skin="neon"] .d7.st-pom { box-shadow: inset 0 0 0 1px currentColor, 0 0 8px currentColor; }
+html[data-skin="neon"] .d7.st-ok { color: var(--c); background: rgba(0,229,255,.28); }
+html[data-skin="neon"] .d7.st-czesc { color: #8c6bff; background: rgba(140,107,255,.3); }
+html[data-skin="neon"] .d7.st-pom { color: var(--m); background: rgba(255,42,109,.3); }
+html[data-skin="neon"] .d7.st-ok i, html[data-skin="neon"] .d7.st-czesc i, html[data-skin="neon"] .d7.st-pom i { color: #ecfbff; }
+html[data-skin="neon"] .d7.today { outline: 1px solid var(--y); outline-offset: 1px; box-shadow: none; }
+
+/* karta pory dnia */
+html[data-skin="neon"] .card-head .when { color: var(--c); font-family: var(--mono); }
+html[data-skin="neon"] .card-head .cnt, html[data-skin="neon"] details.card > summary .cnt { color: var(--y); font-family: var(--mono); }
+html[data-skin="neon"] details.card.done > summary .cnt { color: var(--c); }
+html[data-skin="neon"] details.card > summary::after { border-color: var(--c); }
+html[data-skin="neon"] .okmark { background: var(--c); color: #07070c; box-shadow: 0 0 10px var(--c); }
+
+/* „Wziąłeś?” jak „Pobrało się?” w Finansach */
+html[data-skin="neon"] .late::after { background: var(--m); box-shadow: 0 0 10px var(--m); }
+html[data-skin="neon"] .late-g h3 { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--c); }
+html[data-skin="neon"] .late-i { background: #0b0c14; box-shadow: inset 0 0 0 1px var(--line), -3px 0 10px -4px var(--tc, var(--c)); border-left-width: 3px; }
+html[data-skin="neon"] .late-i .q b { font-family: var(--cond); font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+
+/* pozycja do odhaczenia: rurka z poświatą w kolorze terapii */
+html[data-skin="neon"] .item { background: #0b0c14; border-left-width: 3px; box-shadow: inset 0 0 0 1px var(--line), -3px 0 10px -4px var(--tc, var(--c)); }
+html[data-skin="neon"] .it-txt b { font-family: var(--cond); font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+html[data-skin="neon"] .it-txt em, html[data-skin="neon"] .it-txt small { font-family: var(--mono); font-size: 12px; letter-spacing: .02em; }
+html[data-skin="neon"] .chk { border-color: #4a4470; }
+html[data-skin="neon"] .item.st-wziete { background: rgba(0,229,255,.06); }
+html[data-skin="neon"] .item.st-wziete .chk { background: var(--c); border-color: var(--c); color: #07070c; box-shadow: 0 0 12px rgba(0,229,255,.7); }
+html[data-skin="neon"] .item.st-wziete .it-txt em { color: var(--c); }
+html[data-skin="neon"] .item.st-pominiete .chk { border-color: var(--m); color: var(--m); box-shadow: 0 0 10px rgba(255,42,109,.5); }
+html[data-skin="neon"] .it-more { color: var(--c); border-left-color: var(--line); }
+html[data-skin="neon"] .it-more.undo[data-armed] { color: var(--y); font-family: var(--cond); text-transform: uppercase; letter-spacing: .06em; }
+html[data-skin="neon"] .ic { filter: drop-shadow(0 0 4px currentColor); }
+@keyframes neonPop { 0% { transform: scale(.6); opacity: .2; } 30% { opacity: 1; } 45% { opacity: .4; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+html[data-skin="neon"] .item.just .chk { animation: neonPop .45s linear; }
+html[data-skin="neon"] .btn-sm.yes { color: var(--y); border-color: rgba(243,230,0,.6); }
+
+/* formularze Zdrowia */
+html[data-skin="neon"] .pora-row input, html[data-skin="neon"] .qty label { background: #05050a; border-color: var(--line); font-family: var(--mono); }
+html[data-skin="neon"] .qty label:focus-within { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 14px rgba(0,229,255,.3); }
+html[data-skin="neon"] .qty input { font-family: var(--cond); color: var(--y); text-shadow: 0 0 12px rgba(243,230,0,.35); }
+html[data-skin="neon"] .qty button { background: #10111b; box-shadow: inset 0 0 0 1px var(--line); color: var(--c); }
+html[data-skin="neon"] .pora-row label span { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+html[data-skin="neon"] .sh-state, html[data-skin="neon"] .stock { background: rgba(5,5,10,.8); box-shadow: inset 0 0 0 1px var(--line); }
+html[data-skin="neon"] .sh-h { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--c); }
+
+/* Terapie i zapasy */
+html[data-skin="neon"] .track > span { color: var(--tc, var(--c)); }
+html[data-skin="neon"] .stock.low .track > span { color: var(--warning); background-color: var(--warning); }
+html[data-skin="neon"] .th-head i { box-shadow: 0 0 8px var(--tc, var(--c)); }
+html[data-skin="neon"] .pos .nm b { font-family: var(--cond); font-size: 17px; letter-spacing: .04em; }
+html[data-skin="neon"] .badge.plan { color: var(--y); background: rgba(243,230,0,.12); }
+
+/* Historia: kratki */
+html[data-skin="neon"] .cal-h { font-family: var(--mono); color: var(--c); }
+html[data-skin="neon"] .cal-nav b { font-family: var(--cond); text-transform: uppercase; letter-spacing: .12em; color: var(--y); }
+html[data-skin="neon"] .cal-d { font-family: var(--mono); background: #12121e; box-shadow: inset 0 0 0 1px #24203c; }
+html[data-skin="neon"] .cal-d.st-ok, html[data-skin="neon"] .cal-d.st-czesc, html[data-skin="neon"] .cal-d.st-pom { box-shadow: inset 0 0 0 1px currentColor, 0 0 8px -2px currentColor; }
+html[data-skin="neon"] .cal-d.st-ok { color: var(--c); background: rgba(0,229,255,.22); }
+html[data-skin="neon"] .cal-d.st-czesc { color: #8c6bff; background: rgba(140,107,255,.25); }
+html[data-skin="neon"] .cal-d.st-pom { color: var(--m); background: rgba(255,42,109,.25); }
+html[data-skin="neon"] .cal-d.st-ok span, html[data-skin="neon"] .cal-d.st-czesc span, html[data-skin="neon"] .cal-d.st-pom span { color: #ecfbff; }
+html[data-skin="neon"] .cal-d.st-fut, html[data-skin="neon"] .cal-d.st-none { background: transparent; box-shadow: none; }
+html[data-skin="neon"] .cal-d[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--y), 0 0 14px rgba(243,230,0,.5); }
+html[data-skin="neon"] .cal-sum, html[data-skin="neon"] .cal-leg { font-family: var(--mono); font-size: 12px; }
+html[data-skin="neon"] .cal-sum b { color: var(--y); }
+html[data-skin="neon"] .hrow b { font-family: var(--cond); font-size: 16.5px; letter-spacing: .04em; }
+html[data-skin="neon"] .hrow small { font-family: var(--mono); font-size: 12px; }
+
+/* drobne */
+html[data-skin="neon"] details.more > summary { font-family: var(--cond); text-transform: uppercase; letter-spacing: .08em; color: var(--c); }
+html[data-skin="neon"] .empty b, html[data-skin="neon"] .setup h1 { font-family: var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--y); }
+html[data-skin="neon"] .choice { background: #0b0c14; border-color: var(--line); }

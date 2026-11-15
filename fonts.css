@@ -1,0 +1,12 @@
+/* Kroje pisma skórek (jak w Finansach), z własnego serwera: bez Google Fonts i bez zewnętrznych zapytań.
+   Pliki w fonts/ to podzbiory (łacina z polskimi znakami), licencje w fonts/licencje/.
+   Przeglądarka pobiera krój dopiero wtedy, gdy dana skórka go używa. */
+@font-face { font-family: "Manrope"; src: url("fonts/manrope.woff") format("woff"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Rajdhani"; src: url("fonts/rajdhani-500.woff") format("woff"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Rajdhani"; src: url("fonts/rajdhani-600.woff") format("woff"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Rajdhani"; src: url("fonts/rajdhani-700.woff") format("woff"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrainsmono.woff") format("woff"); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("fonts/montserrat.woff") format("woff"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("fonts/montserrat-italic.woff") format("woff"); font-weight: 100 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "Yellowtail"; src: url("fonts/yellowtail.woff") format("woff"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Archivo"; src: url("fonts/archivo.woff") format("woff"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }

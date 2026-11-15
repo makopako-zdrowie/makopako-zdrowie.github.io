@@ -62,7 +62,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await s.page.click('[data-mode="key"]');
     if (await s.page.$('#suUrl')) await s.page.fill('#suUrl', URL_SKRYPTU); await s.page.fill('#suKey', s.klucz); await s.page.fill('#suName', 'Telefon testowy');
     await s.page.click('#suGo');
-    await s.page.waitForSelector('.lead');
+    await s.page.waitForSelector('.month');
   }
 
   /* ---------- pełny przebieg na telefonie 390 px ---------- */
@@ -72,7 +72,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.waitForSelector('.setup');
     await s.zrzut('01-laczenie'); await s.uklad('łączenie');
     await polacz(s);
-    ok((await page.textContent('.lead')).includes('zostało 5 z 5'), 'zdanie na górze: ' + await page.textContent('.lead'));
+    ok((await page.textContent('.m-big')).trim() === '5 z 5' && /Zostało do odhaczenia/.test(await page.textContent('.month')), 'licznik na górze: ' + await page.textContent('.month'));
     ok((await page.textContent('#abSub')).includes(L.dataPl(dzis)), 'podtytuł z dzisiejszą datą');
     ok(await page.isVisible('.late'), 'karta „Wziąłeś?” jest');
     await s.zrzut('02-dzis'); await s.uklad('Dziś');
@@ -85,7 +85,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(s.wiersze().length === przed + 1, 'wpis w Dzienniku');
     const w = s.wiersze().slice(-1)[0];
     ok(w['Status'] === 'wzięte' && w['Data'] === dzis && w['Pora'] === 'rano' && w['Pozycja'] === 'P1' && w['Ilość'] === 1 && /^\d\d:\d\d$/.test(w['Godzina']) && w['Urządzenie'] === 'Telefon testowy', 'treść wpisu: ' + JSON.stringify(w));
-    ok((await page.textContent('.lead')).includes('zostało 4 z 5'), 'licznik po odhaczeniu');
+    ok((await page.textContent('.m-big')).trim() === '4 z 5', 'licznik po odhaczeniu');
     await page.click('[data-toast-undo]');
     await page.waitForFunction(() => !document.querySelector('.pora .item:first-child').classList.contains('st-wziete'));
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
@@ -96,7 +96,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.waitForSelector('details.pora.done');
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     ok(s.wiersze().filter(x => x['Data'] === dzis && x['Stan'] === '' && x['Status'] === 'wzięte' && x['Pora'] === 'rano').length === 2, 'cała pora: 2 wpisy');
-    ok((await page.textContent('.lead')).includes('zostało 3 z 5'), 'licznik po całej porze');
+    ok((await page.textContent('.m-big')).trim() === '3 z 5', 'licznik po całej porze');
 
     // okno pozycji: inna ilość i notatka
     await page.click('.pora:not(.done) .item:nth-child(2) .it-more');
@@ -185,8 +185,8 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(s.wiersze().length === n0 + 1, 'po powrocie sieci: jeden wpis');
     await page.waitForFunction(() => document.getElementById('sync').hidden);
     ok(true, 'po wysłaniu kolejki komunikat o braku sieci znika');
-    await page.waitForSelector('.lead strong');
-    ok((await page.textContent('.lead')).includes('wszystko odhaczone'), 'wszystko odhaczone: ' + await page.textContent('.lead'));
+    await page.waitForSelector('.m-big.done');
+    ok((await page.textContent('.month')).includes('wszystko odhaczone'), 'wszystko odhaczone: ' + await page.textContent('.month'));
     await s.zrzut('06-dzis-gotowe');
 
     // ⟳ pobiera dane prosto z arkusza (bez pamięci skryptu)
@@ -201,7 +201,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.click('details.planned summary');
     ok(!(await page.isVisible('[data-start="P7"]')), 'pozycja bez harmonogramu nie ma przycisku');
     await page.click('[data-start="P6"]'); await page.click('[data-start="P6"]');
-    await page.waitForFunction(() => /zostało 1 z/.test(document.querySelector('.lead').textContent));
+    await page.waitForFunction(() => /^1 z/.test(document.querySelector('.m-big').textContent.trim()));
     ok(s.env.wiersze('Pozycje')[5]['Status'] === 'aktywna', 'pozycja wystartowała');
 
     // Terapie
@@ -392,7 +392,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(s.env.wiersze('Pory dnia')[0]['Godzina'] === '07:15', 'godzina pory zapisana');
     await s.zrzut('27-ustawienia-v2'); await s.uklad('Ustawienia v2');
     for (const skin of ['jasny', 'neon', 'synthwave', 'racer', 'klasyczny']) {
-      await page.click(`[data-skin="${skin}"]`);
+      await page.click(`[data-skin-set="${skin}"]`);
       ok((await page.evaluate(() => document.documentElement.getAttribute('data-skin') || 'klasyczny')) === skin, 'skórka ' + skin);
       if (skin !== 'klasyczny') { await page.click('#tabbar [data-tab="dzis"]'); await s.zrzut('28-skorka-' + skin); await page.click('[data-tab="ustawienia"]'); }
     }

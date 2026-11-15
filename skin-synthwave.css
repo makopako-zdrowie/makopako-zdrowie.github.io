@@ -1,0 +1,273 @@
+/* Plik złożony przez narzedzia/skorki.py – nie edytuj ręcznie.
+   Część 1: skin-sunset.css z Finansów, bez zmian poza: nazwa skórki, emblemat „Z”, 4 zakładki.
+   Część 2: elementy Zdrowia (narzedzia/skorki/synthwave.css). */
+/* Skórka „Synthwave” (v18.2). Włączana przez <html data-skin="synthwave"> (skin.js, osobno na każdym urządzeniu).
+   Zachód słońca w klimacie Miami lat 80.: fiolet, róż, pomarańcz i turkus, szklane panele, słońce w paski,
+   palmy i siatka na horyzoncie. Własne grafiki, bez znaków żadnej gry. Układ bez zmian. */
+html[data-skin="synthwave"] {
+  color-scheme: dark;
+  --bg: #140a26;
+  --surface: rgba(38,15,62,.78);
+  --surface-2: rgba(72,30,104,.62);
+  --line: rgba(255,130,205,.2);
+  --grid: rgba(255,130,205,.12);
+  --text: #fff4fb;
+  --text-2: #ecd2ef;
+  --muted: #c3a6d3;
+  --income: #ffd36e;
+  --expense: #ff4fa3;
+  --left: #2de2e6;
+  --left-area: #2de2e6;
+  --deficit: #ff3d6e;
+  --good: #5dffb0;
+  --warning: #ffb347;
+  --critical: #ff5577;
+  --focus: #2de2e6;
+  --pink: #ff4fa3;
+  --orange: #ff8a3d;
+  --aqua: #2de2e6;
+  --peach: #ffd36e;
+  --sun: linear-gradient(90deg, #ffb35c, #ff4fa3 70%, #d14be0);
+  --disp: "Montserrat", "Inter", system-ui, sans-serif;
+  --script: "Yellowtail", "Brush Script MT", cursive;
+}
+html[data-skin="synthwave"], html[data-skin="synthwave"] body { background: #140a26; }
+html[data-skin="synthwave"] body { background: transparent; }
+
+/* niebo, słońce, palmy (za treścią) i siatka na horyzoncie */
+html[data-skin="synthwave"] body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 260'%3E%3Cg fill='%230e0619'%3E%3Cpath d='M62 260 C63 205 66 150 78 92 L84 93 C73 150 71 205 72 260Z'/%3E%3Cpath d='M81 90 C62 70 36 66 6 82 C34 70 58 74 80 95Z'/%3E%3Cpath d='M81 90 C66 60 46 44 20 38 C46 52 64 66 78 94Z'/%3E%3Cpath d='M81 90 C88 58 106 42 132 42 C108 50 94 64 84 94Z'/%3E%3Cpath d='M81 90 C104 76 122 82 136 104 C118 88 102 86 84 95Z'/%3E%3Cpath d='M81 90 C78 62 84 36 94 18 C90 42 88 64 85 92Z'/%3E%3Cpath d='M81 90 C70 96 56 112 50 134 C60 114 72 102 83 95Z'/%3E%3C/g%3E%3C/svg%3E") left -38px bottom 22vh / auto 46vh no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 260'%3E%3Cg fill='%230e0619'%3E%3Cpath d='M62 260 C63 205 66 150 78 92 L84 93 C73 150 71 205 72 260Z'/%3E%3Cpath d='M81 90 C62 70 36 66 6 82 C34 70 58 74 80 95Z'/%3E%3Cpath d='M81 90 C66 60 46 44 20 38 C46 52 64 66 78 94Z'/%3E%3Cpath d='M81 90 C88 58 106 42 132 42 C108 50 94 64 84 94Z'/%3E%3Cpath d='M81 90 C104 76 122 82 136 104 C118 88 102 86 84 95Z'/%3E%3Cpath d='M81 90 C78 62 84 36 94 18 C90 42 88 64 85 92Z'/%3E%3Cpath d='M81 90 C70 96 56 112 50 134 C60 114 72 102 83 95Z'/%3E%3C/g%3E%3C/svg%3E") right -52px bottom 25vh / auto 34vh no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffe08a'/%3E%3Cstop offset='.45' stop-color='%23ff9a4d'/%3E%3Cstop offset='.8' stop-color='%23ff4fa3'/%3E%3Cstop offset='1' stop-color='%23c43bd6'/%3E%3C/linearGradient%3E%3Cmask id='m'%3E%3Crect width='200' height='200' fill='white'/%3E%3Crect y='104' width='200' height='5' fill='black'/%3E%3Crect y='120' width='200' height='7' fill='black'/%3E%3Crect y='138' width='200' height='9' fill='black'/%3E%3Crect y='158' width='200' height='11' fill='black'/%3E%3Crect y='180' width='200' height='13' fill='black'/%3E%3C/mask%3E%3C/defs%3E%3Ccircle cx='100' cy='100' r='98' fill='url(%23g)' mask='url(%23m)'/%3E%3C/svg%3E") right 6% bottom 31vh / min(56vw, 300px) auto no-repeat,
+    linear-gradient(180deg, #24093f 0%, #3a0f52 26%, #6b1a5c 52%, #b02f6a 64%, #ff7a59 68.5%, #2a0d44 69%, #170a2c 82%, #10071f 100%);
+  opacity: .9;
+}
+html[data-skin="synthwave"] body::after {
+  content: ''; position: fixed; left: -60%; right: -60%; bottom: 0; height: 31vh; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255,79,163,.55) 1.5px, transparent 1.5px) 50% 0 / 46px 100%,
+    linear-gradient(0deg, rgba(255,79,163,.5) 1.5px, transparent 1.5px) 0 100% / 100% 30px;
+  transform: perspective(260px) rotateX(58deg); transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(to top, #000 15%, transparent 92%); mask-image: linear-gradient(to top, #000 15%, transparent 92%);
+}
+
+/* pasek aplikacji: neon w stylu szyldu */
+html[data-skin="synthwave"] .appbar { background: linear-gradient(90deg, rgba(36,9,62,.97), rgba(74,16,82,.97)); border-bottom: 1px solid rgba(255,79,163,.45); box-shadow: 0 6px 24px rgba(255,79,163,.12); }
+html[data-skin="synthwave"] .ab-title b { font-family: var(--script); font-weight: 400; font-size: 31px; line-height: 1; color: #ff7cc0; letter-spacing: .01em;
+  text-shadow: 0 0 10px rgba(255,79,163,.85), 0 0 22px rgba(255,79,163,.45), 2px 2px 0 rgba(45,226,230,.55); }
+html[data-skin="synthwave"] .ab-title span { color: var(--aqua); font-style: italic; font-weight: 600; }
+html[data-skin="synthwave"] .ib { color: #ffc2e2; }
+html[data-skin="synthwave"] .ib:hover, html[data-skin="synthwave"] .ib[aria-current="page"] { background: rgba(255,79,163,.18); color: #fff; }
+
+/* panele: szkło z różową krawędzią */
+html[data-skin="synthwave"] .panel, html[data-skin="synthwave"] .alerts li {
+  background: linear-gradient(160deg, rgba(56,20,88,.8), rgba(28,10,52,.84));
+  border: 1px solid rgba(255,140,210,.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 12px 30px rgba(8,0,24,.35);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html[data-skin="synthwave"] .hero { background: linear-gradient(160deg, rgba(56,20,88,.8), rgba(28,10,52,.84)); }
+html[data-skin="synthwave"] .panel h2, html[data-skin="synthwave"] .sheet-head h2 { font-family: var(--disp); font-style: italic; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="synthwave"] .panel .desc { color: var(--muted); }
+html[data-skin="synthwave"] .alerts li { background: linear-gradient(90deg, rgba(120,24,80,.78), rgba(40,12,66,.84)); border-color: rgba(255,120,150,.35); }
+
+/* Teraz */
+html[data-skin="synthwave"] .m-head h1, html[data-skin="synthwave"] .sub-head h1 { font-family: var(--disp); font-style: italic; font-weight: 900; text-transform: uppercase; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 0 rgba(209,75,224,.6), 0 0 18px rgba(255,79,163,.35); }
+html[data-skin="synthwave"] .m-head span { color: var(--aqua); font-style: italic; font-weight: 600; }
+html[data-skin="synthwave"] .m-label { color: #ffd6ec; font-weight: 600; }
+html[data-skin="synthwave"] .m-big { font-family: var(--disp); font-style: italic; font-weight: 900; letter-spacing: -.01em; padding-right: .12em;
+  background: linear-gradient(180deg, #ffe7a3 0%, #ffb35c 38%, #ff4fa3 72%, #d14be0 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255,79,163,.45)) drop-shadow(2px 3px 0 rgba(45,226,230,.35)); }
+html[data-skin="synthwave"] .m-big.neg { background: linear-gradient(180deg, #ffb3c6, #ff3d6e); -webkit-background-clip: text; background-clip: text; }
+html[data-skin="synthwave"] .meter, html[data-skin="synthwave"] .osz-bar { background: rgba(10,4,22,.55); box-shadow: inset 0 0 0 1px rgba(255,140,210,.18); padding: 2px; height: 18px; border-radius: 99px; }
+html[data-skin="synthwave"] .meter span, html[data-skin="synthwave"] .osz-bar span { border-radius: 99px; }
+html[data-skin="synthwave"] .meter .sp { background: linear-gradient(90deg, #ff8a3d, #ff4fa3); box-shadow: 0 0 12px rgba(255,79,163,.55); }
+html[data-skin="synthwave"] .meter .rs, html[data-skin="synthwave"] .k.rs { background: repeating-linear-gradient(135deg, rgba(255,79,163,.6) 0 4px, rgba(255,79,163,.15) 4px 8px); }
+html[data-skin="synthwave"] .meter .lf { background: linear-gradient(90deg, #2de2e6, #7b8cff); box-shadow: 0 0 12px rgba(45,226,230,.5); }
+html[data-skin="synthwave"] .k.sp { background: #ff4fa3; } html[data-skin="synthwave"] .k.in { background: #2de2e6; }
+
+/* kwoty i nazwy */
+html[data-skin="synthwave"] .figures .v, html[data-skin="synthwave"] .m-stats b, html[data-skin="synthwave"] .sav-points b, html[data-skin="synthwave"] .pay .amt, html[data-skin="synthwave"] .acc .amt, html[data-skin="synthwave"] .log .a { font-family: var(--disp); font-weight: 800; font-style: italic; }
+html[data-skin="synthwave"] .limit .name, html[data-skin="synthwave"] .pay .nm, html[data-skin="synthwave"] .acc .nm, html[data-skin="synthwave"] .sa-top .nm { font-family: var(--disp); font-weight: 700; }
+
+/* paski */
+html[data-skin="synthwave"] .track, html[data-skin="synthwave"] .cat .bar, html[data-skin="synthwave"] .dblock .bar { background: rgba(10,4,22,.55); box-shadow: inset 0 0 0 1px rgba(255,140,210,.14); }
+html[data-skin="synthwave"] .track > span, html[data-skin="synthwave"] .cat .bar span, html[data-skin="synthwave"] .dblock .bar span, html[data-skin="synthwave"] .sbar span { box-shadow: 0 0 10px rgba(255,140,210,.35); }
+html[data-skin="synthwave"] .months span { background: rgba(120,70,160,.45); }
+html[data-skin="synthwave"] .months span.warn { background: #c9862e; } html[data-skin="synthwave"] .months span.over { background: #c2306b; }
+html[data-skin="synthwave"] .months span.now { outline-color: var(--aqua); }
+
+/* płatności */
+html[data-skin="synthwave"] .pay.st-ok .stripe { background: rgba(190,140,230,.45); }
+html[data-skin="synthwave"] .pay.st-overdue .when b, html[data-skin="synthwave"] .pay.st-urgent .when b { color: #ff8fb0; }
+html[data-skin="synthwave"] .pay.st-paid .when b, html[data-skin="synthwave"] .osz-change .pos, html[data-skin="synthwave"] .goal-txt .pos, html[data-skin="synthwave"] .dblock .cmp.down { color: var(--good); }
+
+/* przyciski: zachód słońca */
+html[data-skin="synthwave"] .pay-btn, html[data-skin="synthwave"] button.save, html[data-skin="synthwave"] .btn-sm.primary-sm, html[data-skin="synthwave"] .ab-add, html[data-skin="synthwave"] .side-add {
+  background: linear-gradient(90deg, #ff8a3d, #ff4fa3 60%, #d14be0); color: #fff; border: 0; font-family: var(--disp); font-style: italic; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  box-shadow: 0 6px 18px rgba(255,79,163,.38); text-shadow: 0 1px 0 rgba(90,0,60,.35);
+}
+html[data-skin="synthwave"] button.save:disabled { background: #3a1a58; color: var(--muted); box-shadow: none; text-shadow: none; }
+html[data-skin="synthwave"] .pay-btn.ghost, html[data-skin="synthwave"] .btn-sm { background: rgba(20,8,40,.35); color: var(--aqua); border: 1px solid rgba(45,226,230,.55); font-family: var(--disp); font-weight: 700; box-shadow: none; text-shadow: none; }
+html[data-skin="synthwave"] .btn-sm:hover { background: rgba(45,226,230,.12); }
+html[data-skin="synthwave"] .edit, html[data-skin="synthwave"] .linkish { color: #ff9fd0; text-decoration-color: rgba(255,159,208,.5); }
+html[data-skin="synthwave"] .danger { color: #ff8fb0; border-color: rgba(255,85,119,.5); }
+
+/* przełączniki i zakładki */
+html[data-skin="synthwave"] .seg, html[data-skin="synthwave"] .seg-sm { background: rgba(10,4,22,.6); box-shadow: inset 0 0 0 1px rgba(255,140,210,.16); }
+html[data-skin="synthwave"] .seg button[aria-pressed="true"], html[data-skin="synthwave"] .seg-sm button[aria-pressed="true"] { background: linear-gradient(90deg, rgba(255,138,61,.35), rgba(255,79,163,.45)); color: #fff; }
+html[data-skin="synthwave"] .tabs button, html[data-skin="synthwave"] .dates button, html[data-skin="synthwave"] .chips button, html[data-skin="synthwave"] .quick button { background: rgba(72,30,104,.5); }
+html[data-skin="synthwave"] .tabs button[aria-pressed="true"], html[data-skin="synthwave"] .dates button[aria-pressed="true"] { background: linear-gradient(90deg, #ff8a3d, #ff4fa3); color: #fff; box-shadow: 0 4px 14px rgba(255,79,163,.35); }
+html[data-skin="synthwave"] .chips button[aria-pressed="true"], html[data-skin="synthwave"] .quick button[aria-pressed="true"] { background: rgba(45,226,230,.16); border-color: var(--aqua); color: #fff; box-shadow: 0 0 14px rgba(45,226,230,.3); }
+html[data-skin="synthwave"] .tabs-arrow.l { background: linear-gradient(90deg, rgba(40,14,66,1) 55%, transparent); }
+html[data-skin="synthwave"] .tabs-arrow.r { background: linear-gradient(270deg, rgba(40,14,66,1) 55%, transparent); }
+
+/* pola formularza */
+html[data-skin="synthwave"] .field select, html[data-skin="synthwave"] .field input, html[data-skin="synthwave"] .search-in, html[data-skin="synthwave"] .num-in, html[data-skin="synthwave"] .bal-row input, html[data-skin="synthwave"] .dates input, html[data-skin="synthwave"] .amount {
+  background: rgba(14,5,30,.7); border-color: rgba(255,140,210,.25); }
+html[data-skin="synthwave"] .amount:focus-within, html[data-skin="synthwave"] .field input:focus, html[data-skin="synthwave"] .search-in:focus { border-color: var(--aqua); box-shadow: 0 0 0 1px var(--aqua), 0 0 16px rgba(45,226,230,.3); outline: none; }
+html[data-skin="synthwave"] .amount input { font-family: var(--disp); font-style: italic; font-weight: 900; color: #ffd36e; }
+html[data-skin="synthwave"] .dsum div, html[data-skin="synthwave"] .sav-points div, html[data-skin="synthwave"] .pay-ctx, html[data-skin="synthwave"] .dnote, html[data-skin="synthwave"] .income-note, html[data-skin="synthwave"] .edit-note, html[data-skin="synthwave"] .pair-box { background: rgba(14,5,30,.55); box-shadow: inset 0 0 0 1px rgba(255,140,210,.14); }
+
+/* arkusz od dołu */
+html[data-skin="synthwave"] .sheet { background: linear-gradient(180deg, #2c0f4a, #190a30 60%); border-top: 1px solid rgba(255,79,163,.5); box-shadow: 0 -10px 40px rgba(255,79,163,.18); }
+html[data-skin="synthwave"] .sheet-bg { background: rgba(12,2,26,.62); }
+html[data-skin="synthwave"] .grab { background: var(--sun); }
+html[data-skin="synthwave"] .x { background: rgba(255,79,163,.15); color: #ff9fd0; }
+html[data-skin="synthwave"] button.save { box-shadow: 0 -10px 18px #1d0b34, 0 6px 18px rgba(255,79,163,.38); }
+
+/* dolne menu, Dodaj jako słońce w paski */
+html[data-skin="synthwave"] .tabbar { background: rgba(26,8,44,.9); border-top: 1px solid rgba(255,79,163,.4); box-shadow: 0 -8px 26px rgba(255,79,163,.1); }
+html[data-skin="synthwave"] .tabbar button { color: #b99ad0; }
+html[data-skin="synthwave"] .tabbar button[aria-current="page"] { color: #ff8cc6; text-shadow: 0 0 10px rgba(255,79,163,.6); }
+html[data-skin="synthwave"] .tabbar button[aria-current="page"] svg { color: #ff8cc6; filter: drop-shadow(0 0 6px rgba(255,79,163,.7)); }
+html[data-skin="synthwave"] .tabbar .tb-add { color: #ffd36e; }
+html[data-skin="synthwave"] .tabbar .tb-add svg { color: #fff; stroke-width: 2.6;
+  background:
+    linear-gradient(180deg, transparent 58%, #1a0830 58% 62%, transparent 62% 70%, #1a0830 70% 75%, transparent 75% 83%, #1a0830 83% 89%, transparent 89%),
+    linear-gradient(180deg, #ffe08a, #ff9a4d 45%, #ff4fa3 80%, #d14be0);
+  box-shadow: 0 0 18px rgba(255,79,163,.55), 0 0 0 4px #1a0830; }
+@media (min-width: 900px) {
+  html[data-skin="synthwave"] .appbar { background: linear-gradient(90deg, rgba(36,9,62,.84), rgba(74,16,82,.84)); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  html[data-skin="synthwave"] .tabbar { background: none; border: 0; box-shadow: none; }
+  html[data-skin="synthwave"] .tabbar button { color: #e6cdf0; font-family: var(--disp); font-weight: 700; }
+  html[data-skin="synthwave"] .tabbar button[aria-current="page"] { background: linear-gradient(90deg, rgba(255,138,61,.28), rgba(255,79,163,.36)); color: #fff; }
+}
+
+/* wykresy i chmurki */
+html[data-skin="synthwave"] .tip, html[data-skin="synthwave"] .sav-chart .tip { background: rgba(26,8,46,.95); border: 1px solid rgba(255,79,163,.55); box-shadow: 0 10px 28px rgba(255,79,163,.22); }
+html[data-skin="synthwave"] .tip .t { color: #ffd36e; }
+html[data-skin="synthwave"] .goal-tick { background: var(--aqua); box-shadow: 0 0 10px var(--aqua); }
+html[data-skin="synthwave"] .goal-pct { color: var(--aqua) !important; }
+
+/* drobne */
+html[data-skin="synthwave"] .tag.tg-role, html[data-skin="synthwave"] .tag.tg-man { color: var(--aqua); border-color: rgba(45,226,230,.45); }
+html[data-skin="synthwave"] .tag.tg-auto { color: #e2a6ff; border-color: rgba(209,75,224,.5); }
+html[data-skin="synthwave"] .tag.tg-in, html[data-skin="synthwave"] .subs .tag { color: var(--good); border-color: rgba(93,255,176,.45); }
+html[data-skin="synthwave"] .badge { color: var(--aqua); background: rgba(45,226,230,.14); }
+html[data-skin="synthwave"] details.paid-more > summary small, html[data-skin="synthwave"] .status-chip { background: rgba(255,79,163,.2); color: #ffc2e2; }
+html[data-skin="synthwave"] .toast { background: linear-gradient(90deg, #ff8a3d, #ff4fa3 60%, #d14be0); color: #fff; box-shadow: 0 10px 28px rgba(255,79,163,.4); }
+html[data-skin="synthwave"] .toast small { color: #ffe3f1; }
+html[data-skin="synthwave"] .toast button { background: #1a0830; color: #fff; }
+html[data-skin="synthwave"] .sub-ask { border-color: rgba(45,226,230,.5); }
+html[data-skin="synthwave"] .sync { background: rgba(40,12,66,.9); }
+html[data-skin="synthwave"] .skin { background: rgba(14,5,30,.6); }
+html[data-skin="synthwave"] .skin[aria-pressed="true"] { border-color: #ff4fa3; box-shadow: 0 0 0 1px #ff4fa3, 0 0 18px rgba(255,79,163,.3); }
+html[data-skin="synthwave"] .skin[aria-pressed="true"]::after { background: #ff4fa3; color: #fff; }
+html[data-skin="synthwave"] .tax .row, html[data-skin="synthwave"] .goal-row, html[data-skin="synthwave"] .loan-row { flex-wrap: wrap; column-gap: 10px; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="synthwave"] .ab-title b { animation: sunsetFlicker 7s infinite; }
+  @keyframes sunsetFlicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .55; } 94% { opacity: 1; } 96% { opacity: .7; } 97% { opacity: 1; } }
+}
+html[data-skin="synthwave"] .seg-sm { max-width: 100%; }
+@media (max-width: 400px) { html[data-skin="synthwave"] .seg-sm button { white-space: normal; line-height: 1.15; font-size: 13px; padding-left: 7px; padding-right: 7px; } }
+
+/* ======================= Zdrowie ======================= */
+/* Elementy Zdrowia w Synthwave: zmienne Zdrowia, karty pór, wiersze do odhaczenia, „Wziąłeś?”, kratki, zapasy.
+   Wspólne elementy (panele, przyciski, okna, menu, toast, alerty, górna karta .month) są wyżej, z Finansów. */
+html[data-skin="synthwave"] {
+  --accent: #2de2e6;
+  --accent-ink: #1a0830;
+  --accent-bg: rgba(45,226,230,.12);
+  --skip: #ffb347;
+  --skip-bg: rgba(255,179,71,.12);
+  --bar-bg: rgba(26,8,44,.9);
+  --sync-bg: rgba(40,12,66,.9);
+  --late-bg: rgba(38,15,62,.78);
+  --late-line: rgba(45,226,230,.5);
+  --toast-bg: #ff4fa3;
+  --toast-text: #fff;
+  --shade: rgba(12,2,26,.62);
+  --k-ok: #2de2e6; --k-czesc: #c774e8; --k-pom: #ff8a3d; --k-brak: #5d3d7a; --k-dor: #ffd36e; --k-none: rgba(42,19,66,.7);
+}
+
+/* Dziś: wszystko odhaczone – licznik w turkusie */
+html[data-skin="synthwave"] .m-big.done { background: linear-gradient(180deg, #b6fbff, #2de2e6 60%, #7b8cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ostatnie 7 dni */
+html[data-skin="synthwave"] .week7 { background: linear-gradient(160deg, rgba(56,20,88,.8), rgba(28,10,52,.84)); border: 1px solid rgba(255,140,210,.2); border-radius: 14px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+html[data-skin="synthwave"] .w7t { color: #ffd6ec; }
+html[data-skin="synthwave"] .w7t b { color: #ffd36e; font-style: italic; }
+html[data-skin="synthwave"] .d7 { background: rgba(42,19,66,.7); border-radius: 8px; }
+html[data-skin="synthwave"] .d7.st-ok { background: linear-gradient(180deg, #2de2e6, #3aa8d8); box-shadow: 0 0 10px rgba(45,226,230,.5); }
+html[data-skin="synthwave"] .d7.st-czesc { background: linear-gradient(180deg, #e2a6ff, #c774e8); }
+html[data-skin="synthwave"] .d7.st-pom { background: linear-gradient(180deg, #ffb35c, #ff8a3d); box-shadow: 0 0 10px rgba(255,138,61,.5); }
+html[data-skin="synthwave"] .d7.today { box-shadow: 0 0 0 2px #ff7cc0; }
+
+/* karta pory dnia */
+html[data-skin="synthwave"] .card-head .when { color: var(--aqua); font-style: italic; font-weight: 600; }
+html[data-skin="synthwave"] .card-head .cnt, html[data-skin="synthwave"] details.card > summary .cnt { color: #ffd36e; font-family: var(--disp); font-style: italic; font-weight: 800; }
+html[data-skin="synthwave"] details.card.done > summary .cnt { color: var(--aqua); }
+html[data-skin="synthwave"] details.card > summary h2 { font-family: var(--disp); font-style: italic; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; padding-right: .1em;
+  background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="synthwave"] details.card > summary::after { border-color: #ff9fd0; }
+html[data-skin="synthwave"] .okmark { background: linear-gradient(135deg, #2de2e6, #7b8cff); color: #1a0830; box-shadow: 0 0 12px rgba(45,226,230,.6); }
+
+/* „Wziąłeś?” jak „Pobrało się?” w Finansach */
+html[data-skin="synthwave"] .late-g h3 { color: var(--aqua); font-style: italic; }
+html[data-skin="synthwave"] .late-i { background: rgba(20,8,40,.45); box-shadow: inset 0 0 0 1px rgba(255,140,210,.14); }
+html[data-skin="synthwave"] .late-i .q b { font-family: var(--disp); font-weight: 700; }
+
+/* pozycja do odhaczenia */
+html[data-skin="synthwave"] .item { background: rgba(20,8,40,.45); box-shadow: inset 0 0 0 1px rgba(255,140,210,.14); border-left-width: 4px; }
+html[data-skin="synthwave"] .it-txt b { font-family: var(--disp); font-weight: 700; }
+html[data-skin="synthwave"] .chk { border-color: rgba(255,159,208,.6); }
+html[data-skin="synthwave"] .item.st-wziete { background: linear-gradient(90deg, rgba(45,226,230,.16), rgba(20,8,40,.45)); }
+html[data-skin="synthwave"] .item.st-wziete .chk { background: linear-gradient(135deg, #2de2e6, #7b8cff); border-color: transparent; color: #1a0830; box-shadow: 0 0 12px rgba(45,226,230,.55); }
+html[data-skin="synthwave"] .item.st-wziete .it-txt em { color: var(--aqua); font-style: italic; }
+html[data-skin="synthwave"] .item.st-pominiete .chk { border-color: #ffb347; color: #ffb347; }
+html[data-skin="synthwave"] .it-more { color: #ff9fd0; border-left-color: rgba(255,140,210,.12); }
+html[data-skin="synthwave"] .btn-sm.yes { color: #ffd36e; border-color: rgba(255,211,110,.6); }
+
+/* formularze Zdrowia */
+html[data-skin="synthwave"] .pora-row input, html[data-skin="synthwave"] .qty label { background: rgba(14,5,30,.7); border-color: rgba(255,140,210,.25); }
+html[data-skin="synthwave"] .qty label:focus-within { border-color: var(--aqua); box-shadow: 0 0 0 1px var(--aqua), 0 0 16px rgba(45,226,230,.3); }
+html[data-skin="synthwave"] .qty input { font-family: var(--disp); font-style: italic; font-weight: 900; color: #ffd36e; }
+html[data-skin="synthwave"] .qty button { background: rgba(72,30,104,.6); color: #ffc2e2; }
+html[data-skin="synthwave"] .sh-state, html[data-skin="synthwave"] .stock { background: rgba(14,5,30,.55); box-shadow: inset 0 0 0 1px rgba(255,140,210,.14); }
+html[data-skin="synthwave"] .sh-h { color: #ff9fd0; font-style: italic; }
+
+/* Terapie i zapasy */
+html[data-skin="synthwave"] .track > span { background: linear-gradient(90deg, #2de2e6, #7b8cff) !important; }
+html[data-skin="synthwave"] .stock.low .track > span { background: linear-gradient(90deg, #ff8a3d, #ff4fa3) !important; }
+html[data-skin="synthwave"] .pos .nm b, html[data-skin="synthwave"] .hrow b { font-family: var(--disp); font-weight: 700; }
+html[data-skin="synthwave"] .th-head h2 { font-family: var(--disp); font-style: italic; font-weight: 800; text-transform: uppercase; }
+html[data-skin="synthwave"] .badge.plan { color: #ffd36e; background: rgba(255,211,110,.14); }
+
+/* Historia: kratki */
+html[data-skin="synthwave"] .cal-h { color: #ff9fd0; font-style: italic; }
+html[data-skin="synthwave"] .cal-nav b { font-family: var(--disp); font-style: italic; font-weight: 800; text-transform: uppercase; background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .1em; }
+html[data-skin="synthwave"] .cal-d { background: rgba(42,19,66,.7); border-radius: 10px; }
+html[data-skin="synthwave"] .cal-d.st-ok { background: linear-gradient(180deg, #2de2e6, #3aa8d8); box-shadow: 0 0 10px rgba(45,226,230,.35); }
+html[data-skin="synthwave"] .cal-d.st-czesc { background: linear-gradient(180deg, #e2a6ff, #c774e8); }
+html[data-skin="synthwave"] .cal-d.st-pom { background: linear-gradient(180deg, #ffb35c, #ff8a3d); }
+html[data-skin="synthwave"] .cal-d.st-fut, html[data-skin="synthwave"] .cal-d.st-none { background: transparent; }
+html[data-skin="synthwave"] .cal-d[aria-pressed="true"] { box-shadow: 0 0 0 2px rgba(26,8,44,.9), 0 0 0 4px #ff7cc0, 0 0 14px rgba(255,79,163,.5); }
+html[data-skin="synthwave"] .cal-sum b { color: #ffd36e; font-style: italic; }
+
+/* drobne */
+html[data-skin="synthwave"] .empty b, html[data-skin="synthwave"] .setup h1 { font-family: var(--disp); font-style: italic; font-weight: 900; text-transform: uppercase; background: var(--sun); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="synthwave"] .choice { background: rgba(38,15,62,.78); border-color: rgba(255,140,210,.25); }

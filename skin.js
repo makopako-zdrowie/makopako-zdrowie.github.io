@@ -1,7 +1,7 @@
 /* Skórka wyglądu – zapamiętana osobno na każdym urządzeniu (localStorage „zdrowie.skin”).
    Ładowana w <head> przed resztą strony, żeby nie mignął zły motyw. Domyślnie: klasyczny. Bez zewnętrznych czcionek. */
 (function () {
-  var BAR = { klasyczny: '#0c1519', jasny: '#f3f6f5', neon: '#07070c', synthwave: '#1b0b2e', racer: '#ece6da' };
+  var BAR = { klasyczny: '#0c1519', jasny: '#f3f6f5', neon: '#07070c', synthwave: '#2a0e4a', racer: '#e9e4d9' };
   var JASNE = { jasny: 1, racer: 1 };
   function apply(s) {
     if (!BAR[s]) s = 'klasyczny';

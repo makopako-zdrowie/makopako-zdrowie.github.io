@@ -49,7 +49,7 @@
     if (H.widok === 'lista') return seg + listaOstatnich(S);
     const terapie = (Z.model().terapie || []).filter(x => ctx.pozycje.some(p => p.terapia === x.id && p.status !== 'planowana'));
     const filtrHtml = terapie.length > 1 ? `<div class="chips filtr" role="group" aria-label="Terapia"><button type="button" data-h-filtr="" aria-pressed="${!H.filtr}">Wszystko</button>${terapie.map(x =>
-      `<button type="button" data-h-filtr="${esc(x.id)}" aria-pressed="${H.filtr === x.id}"><i class="dot" style="background:${esc(x.kolor || 'var(--muted)')}"></i>${esc(x.nazwa)}</button>`).join('')}</div>` : '';
+      `<button type="button" data-h-filtr="${esc(x.id)}" aria-pressed="${H.filtr === x.id}"><i class="dot" style="background:${esc(Z.kolorTerapii(x))}"></i>${esc(x.nazwa)}</button>`).join('')}</div>` : '';
     const filtr = H.filtr ? (p => p.terapia === H.filtr) : null;
     const z = zakresMies(H.mies), stare = starsze(z.od, z.do);
     const dzienStare = H.dzien.slice(0, 7) === H.mies ? stare : starsze(H.dzien, H.dzien);
@@ -69,17 +69,17 @@
     const podsum = plan ? `<p class="cal-sum">W ${MIES_MSC[p[1] - 1]}: wzięte <b>${wz} z ${plan}</b> (${Math.round(100 * wz / plan)}%)${stare === null ? ', wczytuję starsze…' : ''}</p>` : (stare === null ? '<p class="cal-sum">Wczytuję starsze wpisy…</p>' : '');
     const legenda = `<div class="cal-leg"><span><i class="st-ok"></i>wszystko</span><span><i class="st-czesc"></i>część</span><span><i class="st-pom"></i>pominięte</span><span><i class="st-brak"></i>bez odpowiedzi</span></div>`;
     const idxDnia = dzienStare === stare ? idx : L.indeks(Z.wpisy(dzienStare || []));
-    return seg + filtrHtml + `<section class="card cal">${naglowek}<div class="cal-g">${L.DNI_SKROT.map(x => `<span class="cal-h">${x}</span>`).join('')}${kom.join('')}</div>${podsum}${legenda}${blad}</section>`
+    return seg + filtrHtml + `<section class="panel card cal">${naglowek}<div class="cal-g">${L.DNI_SKROT.map(x => `<span class="cal-h">${x}</span>`).join('')}${kom.join('')}</div>${podsum}${legenda}${blad}</section>`
       + panelDnia(H.dzien, idxDnia, dzienStare === null && H.dzien < (Z.model().dziennik || {}).od, filtr, t);
   }
 
   function panelDnia(d, idx, laduje1, filtr, t) {
     const ctx = Z.ctx(), tyt = Z.cap(L.DNI[L.dzienTyg(d)]) + ', ' + L.dataPl(d, t);
-    if (laduje1) return `<section class="card day"><header class="card-head"><h2>${esc(tyt)}</h2></header><p class="desc">Wczytuję wpisy z tego dnia…</p></section>`;
+    if (laduje1) return `<section class="panel card day"><header class="card-head"><h2>${esc(tyt)}</h2></header><p class="desc">Wczytuję wpisy z tego dnia…</p></section>`;
     const ok = p => !filtr || filtr(p);
     const przyszly = d > t;
     const karty = L.dzien(ctx, idx, d).map(k => Object.assign({}, k, { pozycje: k.pozycje.filter(x => ok(x.p)) })).filter(k => k.pozycje.length);
-    const wiersz = (p, opis, st, akcje) => `<div class="hrow st-${st}" style="--c:${Z.kolor(p)}"><div><b>${Z.ikona(p)}${esc(p.nazwa)}</b><small>${esc(opis)}</small></div><div class="hacts">${akcje}</div></div>`;
+    const wiersz = (p, opis, st, akcje) => `<div class="hrow st-${st}" style="--tc:${Z.kolor(p)}"><div><b>${Z.ikona(p)}${esc(p.nazwa)}</b><small>${esc(opis)}</small></div><div class="hacts">${akcje}</div></div>`;
     const cofnijBtn = w => `<button type="button" class="btn-sm" data-h-undo="${esc(w.id)}">Cofnij</button>`;
     const plan = karty.map(k => `<h3 class="sh-h">${esc(Z.cap(k.nazwa))}${k.godzina ? ` <span class="muted num">${esc(k.godzina)}</span>` : ''}</h3>` + k.pozycje.map(x => {
       const s = Z.slot(d, x.pora, x.p);
@@ -99,7 +99,7 @@
     const tygodniowe = przyszly ? [] : ctx.pozycje.filter(p => p.h.typ === 'tydz' && ok(p) && L.wZakresie(p, d) && !idx.sloty[L.kluczSlotu(d, L.poryPozycji(p)[0], p.id)])
       .map(p => wiersz(p, L.opisHarmonogramu(p.h), 'none', `<button type="button" class="btn-sm" data-h-week="${esc(d + '|' + p.id)}">${Z.cap(Z.slowo(p))} tego dnia</button>`));
     const pusto = !plan && !inne.length && !tygodniowe.length;
-    return `<section class="card day" aria-label="${esc(tyt)}"><header class="card-head"><h2>${esc(tyt)}</h2></header>
+    return `<section class="panel card day" aria-label="${esc(tyt)}"><header class="card-head"><h2>${esc(tyt)}</h2></header>
       ${pusto ? '<p class="desc">Tego dnia nic nie było w planie.</p>' : ''}${plan}
       ${inne.length ? `<h3 class="sh-h">Poza planem</h3>${inne.join('')}` : ''}${tygodniowe.length ? `<h3 class="sh-h">Raz albo kilka razy w tygodniu</h3>${tygodniowe.join('')}` : ''}
     </section>`;
@@ -108,10 +108,10 @@
   function listaOstatnich(S) {
     const ctx = Z.ctx(), lista = Z.wpisy().slice(-50).reverse();
     if (!lista.length) return '<div class="empty"><b>Jeszcze nic nie zapisano</b>Tu zobaczysz każde odhaczenie i cofniesz pomyłkę.</div>';
-    return `<section class="card"><p class="desc">Ostatnie zapisy, najnowsze na górze. Pomyłkę cofniesz przyciskiem „Cofnij”.</p>${lista.map(w => {
+    return `<section class="panel card"><p class="desc">Ostatnie zapisy, najnowsze na górze. Pomyłkę cofniesz przyciskiem „Cofnij”.</p>${lista.map(w => {
       const p = ctx.pozMap[w.pozycja] || { nazwa: w.pozycja, dawkaN: 1, jednostka: '', h: {}, poryN: [] };
       const gdzie = [w.pora ? Z.nazwaPory(Logika.klucz(w.pora)) : '', Z.kiedy(w.data, S.dzis)].filter(Boolean).join(', ');
-      return `<div class="hrow st-${w.status === 'korekta' || w.status === 'doraźnie' ? 'none' : L.stanWpisu(w)}" style="--c:${ctx.pozMap[w.pozycja] ? Z.kolor(p) : 'var(--line)'}"><div><b>${ctx.pozMap[w.pozycja] ? Z.ikona(p) : ''}${esc(p.nazwa)}</b><small>${esc(gdzie)} · ${esc(Z.opisWpisu(p, w))}${w.czeka ? ' · czeka na wysłanie' : ''}</small></div>
+      return `<div class="hrow st-${w.status === 'korekta' || w.status === 'doraźnie' ? 'none' : L.stanWpisu(w)}" style="--tc:${ctx.pozMap[w.pozycja] ? Z.kolor(p) : 'var(--line)'}"><div><b>${ctx.pozMap[w.pozycja] ? Z.ikona(p) : ''}${esc(p.nazwa)}</b><small>${esc(gdzie)} · ${esc(Z.opisWpisu(p, w))}${w.czeka ? ' · czeka na wysłanie' : ''}</small></div>
         <div class="hacts"><button type="button" class="btn-sm" data-h-undo="${esc(w.id)}">Cofnij</button></div></div>`;
     }).join('')}</section>`;
   }
@@ -203,9 +203,9 @@
     if (!R.terapia || !ctx.terapie[R.terapia]) R.terapia = terapie[0].id;
     const okresy = [['30', '30 dni'], ['90', '90 dni'], ['start', 'od początku terapii'], ['wlasny', 'własny']];
     const z = zakresRaportu(t);
-    const form = `<section class="card rep-form"><h2 class="rep-h">Raport dla lekarza</h2><p class="desc">Jedna strona na wizytę: co i kiedy brałeś, czego nie wziąłeś i dlaczego.</p>
+    const form = `<section class="panel card rep-form"><h2 class="rep-h">Raport dla lekarza</h2><p class="desc">Jedna strona na wizytę: co i kiedy brałeś, czego nie wziąłeś i dlaczego.</p>
       <label class="field"><span>Pacjent (na raporcie; zapamiętane tylko na tym urządzeniu)</span><input id="rPacjent" maxlength="60" autocomplete="name" value="${esc(Z.lsGet('pacjent') || '')}" placeholder="imię i nazwisko"></label>
-      <h3 class="sh-h">Terapia</h3><div class="chips" role="group" aria-label="Terapia">${terapie.map(x => `<button type="button" data-r-ter="${esc(x.id)}" aria-pressed="${R.terapia === x.id}"><i class="dot" style="background:${esc(x.kolor || 'var(--muted)')}"></i>${esc(x.nazwa)}</button>`).join('')}</div>
+      <h3 class="sh-h">Terapia</h3><div class="chips" role="group" aria-label="Terapia">${terapie.map(x => `<button type="button" data-r-ter="${esc(x.id)}" aria-pressed="${R.terapia === x.id}"><i class="dot" style="background:${esc(Z.kolorTerapii(x))}"></i>${esc(x.nazwa)}</button>`).join('')}</div>
       <h3 class="sh-h">Okres</h3><div class="chips" role="group" aria-label="Okres">${okresy.map(o => `<button type="button" data-r-okres="${o[0]}" aria-pressed="${R.okres === o[0]}">${o[1]}</button>`).join('')}</div>
       ${R.okres === 'wlasny' ? `<div class="two-col"><label class="field"><span>Od</span><input type="date" id="rOd" value="${esc(z.od)}" max="${t}"></label><label class="field"><span>Do</span><input type="date" id="rDo" value="${esc(z.do)}" max="${t}"></label></div>` : `<p class="hint-avg">${esc(L.dataPl(z.od, t))} – ${esc(L.dataPl(z.do, t))}</p>`}
       <p class="err" id="rErr"></p>
@@ -213,7 +213,7 @@
     if (!R.pokaz) return form;
     if (L.num(z.do) - L.num(z.od) > 400) return form + '<p class="err">Raport obejmuje najwyżej 400 dni. Skróć okres.</p>';
     const stare = starsze(z.od, z.do);
-    if (stare === null) return form + (bladStarszych() ? `<p class="err">Nie udało się wczytać dziennika: ${esc(bladStarszych())} <button type="button" class="linkish" data-h-retry>Spróbuj ponownie</button></p>` : '<div class="card"><p class="desc">Wczytuję dziennik z tego okresu…</p></div>');
+    if (stare === null) return form + (bladStarszych() ? `<p class="err">Nie udało się wczytać dziennika: ${esc(bladStarszych())} <button type="button" class="linkish" data-h-retry>Spróbuj ponownie</button></p>` : '<div class="panel card"><p class="desc">Wczytuję dziennik z tego okresu…</p></div>');
     const r = L.raport(ctx, Z.wpisy(stare), R.terapia, z.od, z.do, t), ter = ctx.terapie[R.terapia], pacjent = (Z.lsGet('pacjent') || '').trim();
     let plan = 0, wz = 0;
     r.bloki.forEach(b => { plan += b.plan; wz += b.wz; });
@@ -246,7 +246,7 @@
       ${dor ? `<section class="rs"><h3>Doraźnie</h3>${dor}</section>` : ''}
       <p class="rep-foot">Przygotowano ${esc(pelna(t))} w aplikacji Zdrowie, z codziennych odhaczeń.</p>
     </article>
-    <div class="dev-acts center rep-acts"><button type="button" class="btn-sm primary" data-print>Drukuj albo zapisz PDF</button></div>`;
+    <div class="dev-acts center rep-acts"><button type="button" class="btn-sm primary-sm" data-print>Drukuj albo zapisz PDF</button></div>`;
     return form + rep;
   }
   document.addEventListener('input', e => { if (e.target && e.target.id === 'rPacjent') Z.lsSet('pacjent', e.target.value.trim().slice(0, 60)); });

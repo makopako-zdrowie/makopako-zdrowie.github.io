@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.0.2';
+window.CLIENT_VERSION = '2.1';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -74,7 +74,31 @@ window.CLIENT_VERSION = '2.0.2';
   const dawkaTxt = (p, n) => (p.dawka > 0 || n > 0 ? L.ilosc(n > 0 || n === 0 ? n : p.dawka, p.jednostka) : '');
   const podpis = p => [dawkaTxt(p), p.warunki, p.przyp && p.przyp !== 'nie' ? '⏰ ' + p.przyp : ''].filter(Boolean).join(' · ');
   const opisPrzyp = p => (p.przyp === 'nie' ? 'bez przypomnienia' : p.przyp ? 'przypomnienie o ' + p.przyp : '');
-  const kolor = p => { const t = ctx.terapie[p.terapia]; return t && t.kolor ? t.kolor : 'var(--line)'; };
+  /* kolory terapii w skórkach (jak kolory kategorii w Finansach): Neon ma własną paletę, Synthwave i Racer przeliczają odcień */
+  const NEON_CACHE = {};
+  function neonize(c, mode) {
+    const key = mode + c;
+    if (NEON_CACHE[key]) return NEON_CACHE[key];
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+    const l0 = (mx + mn) / 2, s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0;
+    const P = { neon: [1, 0.58, 0.52], synthwave: [0.92, 0.66, 0.6], racer: [0.6, 0.44, 0.46] }[mode] || [1, 0.58, 0.52];
+    const S = s0 < 0.12 ? s0 : P[0], Lx = s0 < 0.12 ? Math.max(0.62, l0) : (h > 40 && h < 75 ? P[2] : P[1]);
+    const k = n => (n + h / 30) % 12, a = S * Math.min(Lx, 1 - Lx);
+    const f = n => Math.round((Lx - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))) * 255).toString(16).padStart(2, '0');
+    return (NEON_CACHE[key] = '#' + f(0) + f(8) + f(4));
+  }
+  const NEON_PAL = { '#4fa3e0': '#00e5ff', '#2fbf93': '#39ff88', '#e0b84c': '#ffb800', '#c0567a': '#ff2a6d', '#9b7be0': '#8c6bff', '#e0894c': '#ff8a00', '#5cc8d6': '#3df2ff', '#a3b84f': '#c6ff00' };
+  const skinKolor = c => {
+    const s = window.SKIN;
+    if (!/^#[0-9a-f]{6}$/i.test(c) || !(s === 'neon' || s === 'synthwave' || s === 'racer')) return c;
+    c = c.toLowerCase();
+    return s === 'neon' && NEON_PAL[c] ? NEON_PAL[c] : neonize(c, s);
+  };
+  const kolor = p => { const t = ctx.terapie[p.terapia]; return t && t.kolor ? skinKolor(t.kolor) : 'var(--line)'; };
   const nazwaPory = k => { const p = ctx.poryMap[k]; return p ? p.nazwa : k; };
   const slot = (data, pora, p) => esc(data + '|' + pora + '|' + p.id);
   const zeSlotu = s => { const a = String(s).split('|'); return { data: a[0], pora: a[1], p: ctx.pozMap[a[2]] }; };
@@ -154,7 +178,7 @@ window.CLIENT_VERSION = '2.0.2';
   function alerty(S) {
     const li = [];
     Rdzen.outbox.list().filter(x => x.error).forEach(x => {
-      li.push(`<li><span class="ico crit" aria-hidden="true">!</span><span><b>Nie zapisało się:</b> ${esc(x.label || 'wpis')}. ${esc(x.error)} <button type="button" class="linkish" data-drop="${esc(x.cid)}">Usuń</button></span></li>`);
+      li.push(`<li><span class="ico critical" aria-hidden="true">!</span><span><b>Nie zapisało się:</b> ${esc(x.label || 'wpis')}. ${esc(x.error)} <button type="button" class="linkish" data-drop="${esc(x.cid)}">Usuń</button></span></li>`);
     });
     S.zapasy.filter(z => z.alert).forEach(z => {
       const n = `<b>${esc(z.p.nazwa)}</b>`, kon = L.dataPl(z.koniec, S.dzis), co = z.p.rodzaj === 'lek' ? ' Czas na receptę.' : ' Czas kupić nowe.';
@@ -164,9 +188,9 @@ window.CLIENT_VERSION = '2.0.2';
       else if (z.zostalo <= 0) t = `${n}: według odhaczeń opakowanie jest już puste.`;
       else if (z.dniDoKonca < 0) t = `${n}: zostało ${dawkaTxt(z.p, z.zostalo)}, to za mało na dziś.` + co;
       else t = `${n} wystarczy do ${z.dniDoKonca === 0 ? 'dziś' : kon} (zostało ${dawkaTxt(z.p, z.zostalo)}).` + co;
-      li.push(`<li><span class="ico${z.dniDoKonca <= 3 ? ' crit' : ''}" aria-hidden="true">!</span><span>${t} <button type="button" class="linkish" data-finish="${esc(z.opak.id)}">Skończyło się</button></span></li>`);
+      li.push(`<li><span class="ico ${z.dniDoKonca <= 3 ? 'critical' : 'warning'}" aria-hidden="true">!</span><span>${t} <button type="button" class="linkish" data-finish="${esc(z.opak.id)}">Skończyło się</button></span></li>`);
     });
-    if ((D.warnings || []).length) li.push(`<li><span class="ico" aria-hidden="true">i</span><span>Arkusz wymaga poprawek (${D.warnings.length}). <button type="button" class="linkish" data-tab="ustawienia">Zobacz w Ustawieniach</button></span></li>`);
+    if ((D.warnings || []).length) li.push(`<li><span class="ico warning" aria-hidden="true">i</span><span>Arkusz wymaga poprawek (${D.warnings.length}). <button type="button" class="linkish" data-tab="ustawienia">Zobacz w Ustawieniach</button></span></li>`);
     return li.length ? `<ul class="alerts">${li.join('')}</ul>` : '';
   }
   /** Przycisk z prawej: „⋯” (więcej) dla nieodhaczonych, „↶” (cofnij, dwa dotknięcia) dla odhaczonych. */
@@ -177,7 +201,7 @@ window.CLIENT_VERSION = '2.0.2';
     const p = x.p, opis = opisWpisu(p, x.wpis), sub = podpis(p), s = slot(data, x.pora, p);
     const lab = x.stan === 'do' ? `${p.nazwa}${sub ? ', ' + sub : ''}: oznacz jako ${slowo(p)}` : `${p.nazwa}: ${opis}. Szczegóły`;
     const just = swieze[L.kluczSlotu(data, x.pora, p.id)] > Date.now() - 1500 ? ' just' : '';
-    return `<li class="item st-${x.stan}${x.wpis && x.wpis.czeka ? ' pending' : ''}${just}" style="--c:${kolor(p)}">
+    return `<li class="item st-${x.stan}${x.wpis && x.wpis.czeka ? ' pending' : ''}${just}" style="--tc:${kolor(p)}">
       <button type="button" class="it-main" data-take="${s}" aria-label="${esc(lab)}">
         <span class="chk" aria-hidden="true">${x.stan === 'pominiete' ? '–' : x.stan === 'niewiem' ? '?' : CHECK}</span>
         <span class="it-txt"><b>${ikona(p)}${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${opis ? `<em>${esc(opis)}</em>` : ''}</span>
@@ -188,10 +212,10 @@ window.CLIENT_VERSION = '2.0.2';
     const fl = blysk.pora === k.klucz && blysk.do > Date.now() ? ' flash' : '';
     const lista = `<ul class="items">${k.pozycje.map(x => wiersz(x, S.dzis)).join('')}</ul>`;
     if (!k.doZrobienia) {
-      return `<details class="card pora done${fl}" data-key="${esc(id)}" data-pora="${esc(k.klucz)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
+      return `<details class="panel card pora done${fl}" data-key="${esc(id)}" data-pora="${esc(k.klucz)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
     }
-    return `<section class="card pora${fl}" data-pora="${esc(k.klucz)}"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
-      ${lista}${k.doZrobienia >= 2 ? `<button type="button" class="all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
+    return `<section class="panel card pora${fl}" data-pora="${esc(k.klucz)}"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
+      ${lista}${k.doZrobienia >= 2 ? `<button type="button" class="pay-btn ghost all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
   }
   function kartaZalegle(S) {
     if (!S.zalegle.length) return '';
@@ -199,8 +223,8 @@ window.CLIENT_VERSION = '2.0.2';
       const dzien = g.dniTemu === 1 ? 'Wczoraj' : g.dniTemu === 2 ? 'Przedwczoraj' : cap(L.DNI[L.dzienTyg(g.data)]) + ', ' + L.dataPl(g.data, S.dzis);
       return `<div class="late-g"><h3>${esc(dzien)} · ${esc(g.nazwa)}</h3>${g.pozycje.map(x => {
         const s = slot(g.data, x.pora, x.p), d = dawkaTxt(x.p);
-        return `<div class="late-i" style="--c:${kolor(x.p)}"><div class="q"><b>${esc(x.p.nazwa)}</b>${d ? `<small>${esc(d)}</small>` : ''}</div>
-          <div class="ans" role="group" aria-label="${esc(x.p.nazwa)}: ${esc(dzien.toLowerCase())}, ${esc(g.nazwa)}"><button type="button" class="yes" data-late="tak|${s}">Tak</button><button type="button" data-late="nie|${s}">Nie</button><button type="button" data-late="nw|${s}">Nie pamiętam</button></div></div>`;
+        return `<div class="late-i" style="--tc:${kolor(x.p)}"><div class="q"><b>${esc(x.p.nazwa)}</b>${d ? `<small>${esc(d)}</small>` : ''}</div>
+          <div class="ans" role="group" aria-label="${esc(x.p.nazwa)}: ${esc(dzien.toLowerCase())}, ${esc(g.nazwa)}"><button type="button" class="pay-btn yes" data-late="tak|${s}">Tak</button><button type="button" class="pay-btn ghost" data-late="nie|${s}">Nie</button><button type="button" class="pay-btn ghost" data-late="nw|${s}">Nie pamiętam</button></div></div>`;
       }).join('')}${g.pozycje.length > 1 ? `<button type="button" class="btn-sm late-all" data-late-all="${esc(g.data + '|' + g.klucz)}">Wszystko wzięte</button>` : ''}</div>`;
     };
     // wczoraj od razu na wierzchu; wcześniejsze dni zwinięte, żeby karta nie zasłaniała dzisiejszego planu
@@ -208,7 +232,7 @@ window.CLIENT_VERSION = '2.0.2';
     const ile = starsze.reduce((a, g) => a + g.pozycje.length, 0);
     const reszta = !starsze.length ? '' : !wczoraj.length ? starsze.map(grupa).join('')
       : `<details class="more" data-key="starsze"${opened.starsze ? ' open' : ''}><summary>Wcześniejsze dni (${ile})</summary>${starsze.map(grupa).join('')}</details>`;
-    return `<section class="card late" aria-labelledby="h-late"><header class="card-head"><h2 id="h-late">Wziąłeś?</h2></header>
+    return `<section class="panel card late sub-ask" aria-labelledby="h-late"><header class="card-head"><h2 id="h-late">Wziąłeś?</h2></header>
       <p class="desc">Te podania zostały bez odpowiedzi. Bez niej w raporcie będzie „brak danych”.</p>${wczoraj.map(grupa).join('')}${reszta}</section>`;
   }
   function kartaTydzien(S) {
@@ -223,24 +247,24 @@ window.CLIENT_VERSION = '2.0.2';
       const bok = t.wpisDzis ? `<button type="button" class="it-more undo" data-undo="${esc(t.wpisDzis.id)}" aria-label="Cofnij: ${esc(p.nazwa)}">↶</button>`
         : `<button type="button" class="it-more" data-week-more="${esc(p.id)}" aria-label="Więcej: ${esc(p.nazwa)}">⋯</button>`;
       const just = swieze[L.kluczSlotu(S.dzis, t.pora, p.id)] > Date.now() - 1500 ? ' just' : '';
-      return `<li class="item st-${st}${just}" style="--c:${kolor(p)}">
+      return `<li class="item st-${st}${just}" style="--tc:${kolor(p)}">
         <button type="button" class="it-main" data-week="${esc(p.id)}" aria-label="${esc(p.nazwa)}: ${esc(info)}">
           <span class="chk" aria-hidden="true">${st === 'pominiete' ? '–' : CHECK}</span>
           <span class="it-txt"><b>${ikona(p)}${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}<em>${esc(info)}</em></span>
         </button>${bok}</li>`;
     }).join('');
-    return `<section class="card week" aria-labelledby="h-week"><header class="card-head"><h2 id="h-week">W tym tygodniu</h2></header><ul class="items">${wiersze}</ul></section>`;
+    return `<section class="panel card week" aria-labelledby="h-week"><header class="card-head"><h2 id="h-week">W tym tygodniu</h2></header><ul class="items">${wiersze}</ul></section>`;
   }
   function kartaDorazne(S) {
     if (!S.dorazne.length) return '';
-    return `<section class="card adhoc" aria-labelledby="h-adhoc"><header class="card-head"><h2 id="h-adhoc">Doraźnie</h2></header>${S.dorazne.map(d =>
-      `<div class="row"><div><b>${ikona(d.p)}${esc(d.p.nazwa)}</b><small>dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</small></div><button type="button" class="btn-add" data-adhoc="${esc(d.p.id)}">+ Użyłem</button></div>`).join('')}</section>`;
+    return `<section class="panel card adhoc" aria-labelledby="h-adhoc"><header class="card-head"><h2 id="h-adhoc">Doraźnie</h2></header>${S.dorazne.map(d =>
+      `<div class="row"><div><b>${ikona(d.p)}${esc(d.p.nazwa)}</b><small>dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</small></div><button type="button" class="pay-btn ghost btn-add" data-adhoc="${esc(d.p.id)}">+ Użyłem</button></div>`).join('')}</section>`;
   }
   const moznaZaczac = p => p.h.typ !== 'blad' && (p.h.typ !== 'brak' || p.dorazne);
   function kartaPlanowane() {
     const lista = ctx.pozycje.filter(p => p.status === 'planowana');
     if (!lista.length) return '';
-    return `<details class="card planned" data-key="planowane"${opened.planowane ? ' open' : ''}><summary><h2>Planowane</h2><span class="cnt num">${lista.length}</span></summary>${lista.map(p => {
+    return `<details class="panel card planned" data-key="planowane"${opened.planowane ? ' open' : ''}><summary><h2>Planowane</h2><span class="cnt num">${lista.length}</span></summary>${lista.map(p => {
       const ok = moznaZaczac(p), opis = ok ? [L.opisHarmonogramu(p.h), p.poryN.join(' i '), dawkaTxt(p)].filter(Boolean).join(' · ') : '';
       return `<div class="row"><div><b>${ikona(p)}${esc(p.nazwa)}</b>${opis ? `<small>${esc(opis)}</small>` : ''}${p.uwagi ? `<small>${esc(p.uwagi)}</small>` : ''}${ok ? '' : '<small class="warn-line">Najpierw uzupełnij harmonogram i dawkę.</small>'}</div>
         ${ok ? `<button type="button" class="btn-sm" data-start="${esc(p.id)}">Zaczynam od dziś</button>` : `<button type="button" class="btn-sm" data-edit-p="${esc(p.id)}">Uzupełnij</button>`}</div>`;
@@ -264,11 +288,15 @@ window.CLIENT_VERSION = '2.0.2';
     S.tydzien.forEach(t => { if (t.prefDzis || t.wpisDzis) { razem++; if (!t.wpisDzis && t.zostalo > 0) zostalo++; } });
     const maCos = razem || S.tydzien.length || S.dorazne.length || S.zalegle.length || ctx.pozycje.some(p => p.status === 'planowana');
     if (!maCos) {
-      return alerty(S) + `<div class="empty"><b>Nie ma jeszcze nic do odhaczania</b>Dodaj terapię i pozycje w zakładce Terapie.<div class="dev-acts center"><button type="button" class="btn-sm primary" data-tab="terapie">Przejdź do Terapii</button></div></div>`;
+      return alerty(S) + `<div class="empty"><b>Nie ma jeszcze nic do odhaczania</b>Dodaj terapię i pozycje w zakładce Terapie.<div class="dev-acts center"><button type="button" class="btn-sm primary-sm" data-tab="terapie">Przejdź do Terapii</button></div></div>`;
     }
-    const lead = !razem ? 'Na dziś nic nie ma w planie.' : !zostalo ? '<strong class="done-lead">Na dziś wszystko odhaczone.</strong>' : `Dziś zostało <strong>${zostalo} z ${razem}</strong>.`;
-    const prog = razem ? `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${razem}" aria-valuenow="${razem - zostalo}" aria-label="Odhaczone dziś"><span style="width:${Math.round(100 * (razem - zostalo) / razem)}%"></span></div>` : '';
-    return alerty(S) + `<p class="lead">${lead}</p>${prog}` + pasekTygodnia(S) + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
+    /* górna karta zbudowana jak „Listopad” w Finansach (.month, .m-head, .m-label, .m-big, .meter), żeby skórki działały bez przeróbek */
+    const nast = S.karty.find(k => k.doZrobienia);
+    const glowa = !razem ? 'nic w planie' : !zostalo ? 'wszystko odhaczone' : nast ? 'teraz: ' + nast.nazwa + (nast.godzina ? ' ' + nast.godzina : '') : 'zostało ' + zostalo;
+    const zrob = razem - zostalo, pct = razem ? (100 * zrob / razem).toFixed(2) : 0;
+    const meter = razem ? `<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${razem}" aria-valuenow="${zrob}" aria-label="Odhaczone dziś: ${zrob} z ${razem}">${zrob ? `<span class="lf" style="flex:0 1 ${pct}%"></span>` : ''}${zostalo ? `<span class="rs" style="flex:1 1 ${(100 - pct).toFixed(2)}%"></span>` : ''}</div>` : '';
+    const big = !razem ? '' : !zostalo ? `<p class="m-label">Na dziś wszystko odhaczone</p><p class="m-big num done">${razem} z ${razem}</p>` : `<p class="m-label">Zostało do odhaczenia</p><p class="m-big num">${zostalo} z ${razem}</p>`;
+    return alerty(S) + `<section class="month hero-d" aria-labelledby="h-dzis"><div class="m-head"><h1 id="h-dzis">Dziś</h1><span>${esc(glowa)}</span></div>${big}${meter}${pasekTygodnia(S)}</section>` + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
   }
 
   /* ================= ekran Terapie ================= */
@@ -312,12 +340,12 @@ window.CLIENT_VERSION = '2.0.2';
     const grupy = (D.terapie || []).map(t => ({ t: t, poz: ctx.pozycje.filter(p => p.terapia === t.id) }));
     const bez = ctx.pozycje.filter(p => !ctx.terapie[p.terapia]);
     if (bez.length) grupy.push({ t: { id: '', nazwa: 'Bez terapii', kolor: '' }, poz: bez });
-    const nowa = `<div class="dev-acts center"><button type="button" class="btn-sm primary" data-new-t>+ Nowa terapia</button></div>`;
+    const nowa = `<div class="dev-acts center"><button type="button" class="btn-sm primary-sm" data-new-t>+ Nowa terapia</button></div>`;
     if (!grupy.length) return `<div class="empty"><b>Nie ma jeszcze terapii</b>Terapia to lekarz albo obszar leczenia, np. „Pulmonologia”. Do niej dodasz leki i zabiegi.${nowa}</div>`;
     return grupy.map(g => {
       const t = g.t, akt = g.poz.filter(p => p.status !== 'zakończona'), zak = g.poz.filter(p => p.status === 'zakończona');
       const sub = [t.lekarz, t.specjalizacja, t.uwagi].filter(Boolean).join(' · '), key = 'zak-' + t.id;
-      return `<section class="card" style="--c:${t.kolor || 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj</button>` : ''}</div>
+      return `<section class="panel card" style="--tc:${t.kolor ? skinKolor(t.kolor) : 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj</button>` : ''}</div>
         ${sub ? `<p class="th-sub">${esc(sub)}</p>` : ''}
         ${akt.map(p => pozycjaHtml(p, S, zap, dor)).join('') || '<div class="pos"><p>Brak aktywnych pozycji.</p></div>'}
         ${t.id ? `<div class="th-add"><button type="button" class="btn-sm" data-new-p="${esc(t.id)}">+ Lek, suplement albo zabieg</button></div>` : ''}
@@ -326,8 +354,9 @@ window.CLIENT_VERSION = '2.0.2';
   }
 
   /* ================= ekran Ustawienia ================= */
-  const SKORKI = [['klasyczny', 'Klasyczny', '#0c1519', '#2fbf93'], ['jasny', 'Jasny', '#f3f6f5', '#13916c'], ['neon', 'Neon', '#07070c', '#00e5ff'],
-    ['synthwave', 'Synthwave', '#1b0b2e', '#ff6ad5'], ['racer', 'Racer', '#ece6da', '#d9361e']];
+  const SKORKI = [['klasyczny', 'Klasyczny', 'ciemny, spokojny', '<s></s><i></i><i></i><i></i><em></em>'], ['jasny', 'Jasny', 'na dzień', '<s></s><i></i><i></i><i></i><em></em>'],
+    ['neon', 'Neon', 'cyberpunk', '<s></s><i></i><i></i><i></i><em></em>'], ['synthwave', 'Synthwave', 'zachód słońca, lata 80.', '<b></b><s></s><i></i><em></em>'],
+    ['racer', 'Racer', 'jasny, retro wyścig', '<s></s><i></i><em></em>']];
   function viewUstawienia() {
     const r = (D.prefs && D.prefs.reminders) || {};
     const kiedySync = r.lastSync ? (() => { const d = new Date(r.lastSync); return two(d.getHours()) + ':' + two(d.getMinutes()); })() : '';
@@ -338,7 +367,7 @@ window.CLIENT_VERSION = '2.0.2';
     const czeka = Rdzen.outbox.list().length, skin = window.SKIN || 'klasyczny';
     return `<section class="panel" aria-labelledby="h-rem"><div class="panel-head"><div><h2 id="h-rem">Przypomnienia</h2>
         <p class="desc">Kalendarz Google „${esc(r.calendar || 'Zdrowie – przypomnienia')}”: wydarzenie o godzinie pory, z linkiem do aplikacji. Znika, gdy wszystko z pory jest odhaczone. Własną godzinę albo „bez przypomnienia” ustawiasz w edycji pozycji.</p></div>
-        <button type="button" class="btn-sm${r.enabled ? '' : ' primary'}" data-rem="${r.enabled ? '0' : '1'}">${r.enabled ? 'Wyłącz' : 'Włącz'}</button></div>
+        <button type="button" class="btn-sm${r.enabled ? '' : ' primary-sm'}" data-rem="${r.enabled ? '0' : '1'}">${r.enabled ? 'Wyłącz' : 'Włącz'}</button></div>
       <p class="line">${r.enabled ? `Włączone. Wydarzeń w kalendarzu: ${r.count || 0}${kiedySync ? ', ostatnia zmiana ' + kiedySync : ''}.` : 'Wyłączone.'}</p>
       ${r.error ? `<p class="err">${esc(r.error)}</p>` : ''}
       <h3 class="sh-h">Przypomnij jeszcze raz, jeśli nie odhaczę</h3>
@@ -348,7 +377,7 @@ window.CLIENT_VERSION = '2.0.2';
       <div class="dev-acts"><button type="button" class="btn-sm" data-pory-save>Zapisz godziny</button></div>
       <p class="hint-avg">Puste „w weekend” = jak w tygodniu. Pierwsze włączenie przypomnień: w Apps Script uruchom raz funkcję wlaczPrzypomnienia (zgoda na Kalendarz).</p></section>
     <section class="panel" aria-labelledby="h-skin"><h2 id="h-skin">Wygląd</h2><p class="desc">Zapamiętany osobno na każdym urządzeniu.</p>
-      <div class="skins">${SKORKI.map(s => `<button type="button" class="skin" data-skin="${s[0]}" aria-pressed="${skin === s[0]}"><span class="sw" style="background:${s[2]}"><i style="background:${s[3]}"></i></span>${s[1]}</button>`).join('')}</div></section>
+      <div class="skin-list">${SKORKI.map(s => `<button type="button" class="skin" data-skin-set="${s[0]}" aria-pressed="${skin === s[0]}"><span class="pv pv-${s[0]}" aria-hidden="true">${s[3]}</span><b>${s[1]}</b><small>${s[2]}</small></button>`).join('')}</div></section>
     ${devPanel.html()}
     <section class="panel" aria-labelledby="h-ark"><h2 id="h-ark">Arkusz</h2>
       <p class="desc">Wszystko z aplikacji trafia do arkusza Google. Możesz tam też poprawiać dane ręcznie: aplikacja odczyta je po odświeżeniu.</p>
@@ -597,8 +626,8 @@ window.CLIENT_VERSION = '2.0.2';
         wyslij('savePory', { pory: pory }, b, 'Godziny pór zapisane. Przypomnienia się przestawią.', $('poryErr'));
         return;
       }
-      if ((b = e.target.closest('[data-skin]'))) {
-        if (window.setSkin) window.setSkin(b.dataset.skin);
+      if ((b = e.target.closest('[data-skin-set]'))) {                // nie [data-skin]: ten atrybut ma też <html>
+        if (window.setSkin) window.setSkin(b.dataset.skinSet);
         render();
       }
     });
@@ -702,7 +731,7 @@ window.CLIENT_VERSION = '2.0.2';
     model: () => D, ctx: () => ctx, stan: stan, wpisy: wpisy, render: render, idz: idz, tab: () => tab,
     otworz: otworz, zamknij: zamknij, toast: toast, wyslij: wyslij, uzbrojony: uzbrojony, zapisz: zapisz, cofnij: cofnij, nowyWpis: nowyWpis,
     oknoPodania: oknoPodania, opisWpisu: opisWpisu, dawkaTxt: dawkaTxt, podpis: podpis, ikona: ikona, kolor: kolor, nazwaPory: nazwaPory,
-    slowo: slowo, slot: slot, zeSlotu: zeSlotu, CHECK: CHECK, opened: opened
+    slowo: slowo, slot: slot, zeSlotu: zeSlotu, CHECK: CHECK, opened: opened, kolorTerapii: t => (t && t.kolor ? skinKolor(t.kolor) : 'var(--muted)')
   });
   // start po wczytaniu wszystkich plików (moduly.js dokłada ekrany Historia i Raport oraz edycję)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => Rdzen.boot());
