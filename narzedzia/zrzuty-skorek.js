@@ -38,7 +38,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
       await page.click(`[data-tab="${t}"]`); await page.waitForTimeout(400);
       await page.screenshot({ path: path.join(OUT, `${W}-${skin}-${t}.png`) });
     }
-    await page.click('#tabbar [data-tab="dzis"]'); await page.click('.panel.pora:not(.done) .item:not(.st-wziete) .it-more >> nth=0'); await page.waitForTimeout(450);
+    await page.click('#tabbar [data-tab="dzis"]'); await page.click('.panel.pora:not(.done) .item:not(.st-wziete) [data-more] >> nth=0'); await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(OUT, `${W}-${skin}-okno.png`) });
     await ctx.close();
   }

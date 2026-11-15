@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.1';
+window.CLIENT_VERSION = '2.1.1';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -141,6 +141,7 @@ window.CLIENT_VERSION = '2.1';
     items.forEach(it => { if (it.status === 'wzięte') swieze[L.kluczSlotu(it.data, it.pora, it.pozycja)] = t; });
     brr(items.length > 1 ? [18, 60, 18] : 18);
     render();
+    setTimeout(() => { if (!sheetOn) render(); }, 2600);                         // po animacji odhaczone chowa się pod „Odhaczone”
     toast(esc(komunikat), () => cofnij(ids));
   }
   function cofnij(ids) {
@@ -211,11 +212,16 @@ window.CLIENT_VERSION = '2.1';
     const razem = k.pozycje.length, zrobione = razem - k.doZrobienia, id = 'pora-' + k.klucz;
     const fl = blysk.pora === k.klucz && blysk.do > Date.now() ? ' flash' : '';
     const lista = `<ul class="items">${k.pozycje.map(x => wiersz(x, S.dzis)).join('')}</ul>`;
+    // odhaczone (np. D3 wzięta już przy obiedzie) nie wiszą na liście do zrobienia: chowają się pod „Odhaczone”; świeżo odhaczone zostają chwilę dla animacji
+    const swiezo = x => swieze[L.kluczSlotu(S.dzis, x.pora, x.p.id)] > Date.now() - 2500;
+    const doZrob = k.pozycje.filter(x => x.stan === 'do' || swiezo(x)), odh = k.pozycje.filter(x => doZrob.indexOf(x) < 0), kOdh = id + '-odh';
+    const listaDo = `<ul class="items">${doZrob.map(x => wiersz(x, S.dzis)).join('')}</ul>`
+      + (odh.length ? `<details class="more odh" data-key="${esc(kOdh)}"${opened[kOdh] ? ' open' : ''}><summary>Odhaczone (${odh.length})</summary><ul class="items">${odh.map(x => wiersz(x, S.dzis)).join('')}</ul></details>` : '');
     if (!k.doZrobienia) {
       return `<details class="panel card pora done${fl}" data-key="${esc(id)}" data-pora="${esc(k.klucz)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
     }
     return `<section class="panel card pora${fl}" data-pora="${esc(k.klucz)}"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
-      ${lista}${k.doZrobienia >= 2 ? `<button type="button" class="pay-btn ghost all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
+      ${listaDo}${k.doZrobienia >= 2 ? `<button type="button" class="pay-btn ghost all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
   }
   function kartaZalegle(S) {
     if (!S.zalegle.length) return '';
@@ -388,12 +394,61 @@ window.CLIENT_VERSION = '2.1';
       <div class="dev-acts"><button type="button" class="btn-sm" data-refresh>Odśwież dane</button></div></section>`;
   }
 
+  /* ================= panel boczny „Wpisy” (szeroki ekran, jak w Finansach) ================= */
+  const szeroki = () => window.matchMedia && matchMedia('(min-width: 1200px)').matches;
+  const MIES_KR = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+  const krotka = d => +d.slice(8) + ' ' + MIES_KR[+d.slice(5, 7) - 1];
+  let SZUKAJ = '';
+  function wpisLog(w, t) {
+    const p = ctx.pozMap[w.pozycja] || { nazwa: w.pozycja, dawkaN: 1, jednostka: '', h: {}, poryN: [] };
+    const st = w.status === 'korekta' || w.status === 'doraźnie' ? 'none' : L.stanWpisu(w);
+    const mark = w.status === 'doraźnie' ? '+' : w.status === 'korekta' ? '≡' : st === 'wziete' ? '✓' : st === 'pominiete' ? '–' : '?';
+    const opis = [w.pora ? nazwaPory(L.klucz(w.pora)) : '', opisWpisu(p, w)].filter(Boolean).join(' · ');
+    return { w: w, p: p, st: st, mark: mark, opis: opis, szukaj: (krotka(w.data) + ' ' + kiedy(w.data, t) + ' ' + p.nazwa + ' ' + opis).toLowerCase() };
+  }
+  function logLista(lista) {
+    return `<ul class="log">${lista.map(e => `<li class="st-${e.st}${e.w.czeka ? ' pending' : ''}" style="--tc:${ctx.pozMap[e.w.pozycja] ? kolor(e.p) : 'var(--line)'}">
+      <button type="button" class="log-row" data-log="${esc(e.w.id)}" aria-label="Wpis: ${esc(e.p.nazwa)}, ${esc(e.opis)}, ${esc(kiedy(e.w.data, dzis()))}. Szczegóły">
+      <span class="d">${esc(krotka(e.w.data))}</span>
+      <span class="c"><b>${esc(e.p.nazwa)}</b><small>${esc(e.opis)}</small>${e.w.czeka ? '<small class="tag wait">czeka na wysłanie</small>' : ''}</span>
+      <span class="a num">${e.mark}</span><span class="chev" aria-hidden="true">›</span></button></li>`).join('')}</ul>`;
+  }
+  function wynikiSzukania() {
+    const t = dzis(), wszystkie = wpisy().slice().reverse().sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0)).map(w => wpisLog(w, t));   // najnowszy dzień na górze, w dniu od ostatnio zapisanego
+    const slowa = SZUKAJ.toLowerCase().split(/\s+/).filter(Boolean);
+    const traf = !slowa.length ? wszystkie.slice(0, 60) : wszystkie.filter(e => slowa.every(x => e.szukaj.indexOf(x) >= 0)).slice(0, 200);
+    if (!traf.length) return `<p class="empty-log">${slowa.length ? 'Nic nie pasuje do wyszukiwania.' : 'Nie ma jeszcze wpisów.'}</p>`;
+    return (slowa.length ? `<p class="hint-avg">Znalezione: ${traf.length}${traf.length === 200 ? '+' : ''}</p>` : '') + logLista(traf);
+  }
+  function renderBok() {
+    const side = $('side');
+    if (!side) return;
+    if (!szeroki()) { if (side.innerHTML) side.innerHTML = ''; return; }
+    const pole = side.querySelector('[data-search]');
+    if (pole && document.activeElement === pole) { side.querySelector('[data-search-out]').innerHTML = wynikiSzukania(); return; }   // nie zabieramy kursora
+    const ost = wpisy().filter(w => w.status !== 'korekta').reduce((m, w) => (!m || w.data >= m.data ? w : m), null), t = dzis();
+    side.innerHTML = `<section class="panel log-panel" aria-labelledby="h-logs"><h2 id="h-logs">Wpisy</h2>
+      <p class="desc">${ost ? `Ostatni wpis: <b>${esc(kiedy(ost.data, t))}${ost.godz ? ' ' + esc(ost.godz) : ''}</b>. ` : ''}Dotknij wpisu, żeby zobaczyć szczegóły albo go cofnąć.</p>
+      <div class="search"><input type="search" class="search-in" data-search placeholder="Szukaj: nazwa, pora, data" value="${esc(SZUKAJ)}" aria-label="Szukaj wpisów"></div>
+      <div class="search-out" data-search-out>${wynikiSzukania()}</div></section>`;
+  }
+  /** Okno jednego wpisu z panelu bocznego: opis i „Cofnij”. */
+  function oknoWpisu(id) {
+    const w = wpisy().filter(x => x.id === id)[0];
+    if (!w) return;
+    const e = wpisLog(w, dzis());
+    otworz(e.p.nazwa, `<p class="sh-sub">${esc(cap(kiedy(w.data, dzis())))}${w.data !== dzis() ? ' (' + esc(L.dataPl(w.data, dzis())) + ')' : ''}</p>
+      <div class="sh-state">${esc(cap(e.opis))}${w.notatka ? `<small>${esc(w.notatka)}</small>` : ''}${w.czeka ? '<small>Czeka na wysłanie do arkusza.</small>' : ''}</div>
+      <button type="button" class="danger" data-sh-undo="${esc(w.id)}">Cofnij ten wpis</button>`, { wpis: id });
+  }
+
   /* ================= rysowanie ================= */
   function render() {
     if (!D || !ctx) return;
     const S = stan(), app = $('app');
     lastDay = S.dzis;
     $('abSub').textContent = L.DNI[L.dzienTyg(S.dzis)] + ', ' + L.dataPl(S.dzis);
+    renderBok();
     const para = $('pairBox'), zachowaj = para && !para.hidden ? para : null;      // kod parowania przeżywa odświeżenie ekranu
     const aktywny = document.activeElement && app.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
     if (aktywny) return;                                                           // nie kasujemy tego, co ktoś właśnie wpisuje
@@ -631,6 +686,11 @@ window.CLIENT_VERSION = '2.1';
         render();
       }
     });
+
+    const side = $('side');
+    side.addEventListener('click', e => { const b = e.target.closest('[data-log]'); if (b) oknoWpisu(b.dataset.log); });
+    side.addEventListener('input', e => { if (e.target.matches('[data-search]')) { SZUKAJ = e.target.value; side.querySelector('[data-search-out]').innerHTML = wynikiSzukania(); } });
+    if (window.matchMedia) { const mq = matchMedia('(min-width: 1200px)'); const f = () => render(); if (mq.addEventListener) mq.addEventListener('change', f); else if (mq.addListener) mq.addListener(f); }
 
     $('sheet').addEventListener('click', e => {
       const c = sheetCtx;

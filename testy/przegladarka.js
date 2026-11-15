@@ -86,6 +86,8 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     const w = s.wiersze().slice(-1)[0];
     ok(w['Status'] === 'wzięte' && w['Data'] === dzis && w['Pora'] === 'rano' && w['Pozycja'] === 'P1' && w['Ilość'] === 1 && /^\d\d:\d\d$/.test(w['Godzina']) && w['Urządzenie'] === 'Telefon testowy', 'treść wpisu: ' + JSON.stringify(w));
     ok((await page.textContent('.m-big')).trim() === '4 z 5', 'licznik po odhaczeniu');
+    await page.waitForSelector('[data-pora="rano"] details.odh .item.st-wziete', { state: 'attached', timeout: 5000 });
+    ok(!(await page.$('[data-pora="rano"] > .items .item.st-wziete')) && /Odhaczone \(1\)/.test(await page.textContent('[data-pora="rano"] details.odh summary')), 'odhaczone chowa się pod „Odhaczone (1)”');
     await page.click('[data-toast-undo]');
     await page.waitForFunction(() => !document.querySelector('.pora .item:first-child').classList.contains('st-wziete'));
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
@@ -414,7 +416,19 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     const s = await sesja(w, h, mobile);
     await polacz(s);
     await s.zrzut('dzis'); await s.uklad('Dziś');
-    await s.page.click('.pora .item:first-child .it-more'); await s.page.waitForSelector('#sheet.open');
+    if (w >= 1200) {
+      await s.page.click('.pora .item:first-child .it-main');
+      await s.page.waitForSelector('#side .log li');
+      ok(await s.page.isVisible('#side .log-panel') && (await s.page.textContent('#side .log li:first-child')).includes('wzięte'), 'panel boczny „Wpisy”: najnowszy wpis na górze');
+      await s.page.fill('#side [data-search]', 'zzzz'); await s.page.waitForSelector('#side .empty-log');
+      await s.page.fill('#side [data-search]', ''); await s.page.waitForSelector('#side .log li');
+      await s.page.click('#side .log-row'); await s.page.waitForSelector('#sheet.open [data-sh-undo]');
+      ok(true, 'wpis z panelu otwiera okno z „Cofnij”');
+      await s.page.click('#sheetClose'); await s.page.waitForFunction(() => !document.querySelector('#sheet.open'));
+      await s.page.waitForTimeout(350);
+      await s.zrzut('dzis-panel');
+    } else ok(!(await s.page.isVisible('#side .log-panel')), 'bez panelu bocznego na wąskim ekranie');
+    await s.page.click('.pora > .items .item:not(.st-wziete) [data-more]'); await s.page.waitForSelector('#sheet.open');
     await s.zrzut('okno'); await s.uklad('okno podania');
     await s.page.click('#sheetClose'); await s.page.waitForFunction(() => !document.querySelector('#sheet.open'));
     await s.page.waitForTimeout(350);
