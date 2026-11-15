@@ -6,7 +6,7 @@ Osobista aplikacja do odhaczania leków, suplementów i zabiegów: jedno dotkni�
 
 ## Pliki
 
-- `index.html`, `styles.css`, `app.js`: ekrany (Dziś, Terapie, Ustawienia), bez zewnętrznych bibliotek.
+- `index.html`, `styles.css`, `skin.js`, `app.js`, `moduly.js`: ekrany (Dziś, Historia, Terapie, Raport dla lekarza, Ustawienia), edycja w aplikacji i skórki, bez zewnętrznych bibliotek.
 - `logika.js`: harmonogramy, plan dnia, tydzień, zapasy, przypomnienia. Ta sama logika jest w `apps-script/Code.gs` (wstawia ją `node narzedzia/zbuduj.js`), więc telefon i skrypt liczą tak samo.
 - `rdzen.js`: połączenie ze skryptem, przepustki urządzeń, parowanie kodem, kolejka offline (rdzeń z aplikacji Finanse).
 - `config.js`: adres skryptu (sam adres nic nie zdradza: bez przepustki skrypt nie zwraca danych).

@@ -38,7 +38,7 @@ test('dostęp: bez klucza i z błędnym kluczem nic; klucz → przepustka; parow
   assert.equal(env.post({ key: 'zly-klucz', fn: 'refreshData' }).auth, true);
   const call = env.polacz('Telefon');
   const m = call('refreshData');
-  assert.equal(m.version, '1.1'); assert.equal(m.dzis, DZIS);
+  assert.equal(m.version, '2.0'); assert.equal(m.dzis, DZIS);
   assert.equal(m.devices.list.length, 1); assert.ok(m.devices.list[0].current);
   assert.ok(!JSON.stringify(m).includes(env.props.API_KEY));
   const kod = call('pairStart').code;
@@ -75,7 +75,7 @@ test('model: ostrzeżenia przy błędach w arkuszu i zużycie zapasu sprzed okna
   assert.match(m.warnings.join(' '), /nie rozumiem harmonogramu „jak popadnie”/);
   assert.match(m.warnings.join(' '), /pory „o świcie” nie ma/);
   assert.equal(m.dziennik.wpisy.length, 40 * 2);
-  assert.equal(m.opakowania[0].zuzytePrzed, 60 * 2);
+  assert.deepEqual(m.opakowania[0].przed, { zuz: 60 * 2 });
   const z = L.zapasy(L.przygotuj(m), L.indeks(m.dziennik.wpisy), DZIS).filter(x => x.p.id === 'P1')[0];
   assert.equal(z.zostalo, 500 - 200);
 });
@@ -157,6 +157,7 @@ test('przypomnienia: wydarzenia na pory, znikają po odhaczeniu, wyzwalacz co 15
   const dane = fikcyjneDane(DZIS);
   dane.opakowania[0].ilosc = 30;                                         // 30 − 16 = 14 → skończy się za tydzień → przypomnienie o zapasie
   const env = nowe({ daneStartowe: dane }), call = env.polacz();
+  env.props.REMINDERS = JSON.stringify({ drugie: 0 });                     // bez drugiego przypomnienia (osobny test)
   env.api.wlaczPrzypomnienia();
   assert.equal(env.wyzwalacze.length, 1); assert.equal(env.wyzwalacze[0].min, 15);
   const tytuly = () => env.kalendarz.zdarzenia.slice().sort((a, b) => a.start - b.start).map(e => e.title);
@@ -220,6 +221,7 @@ test('kolumna „Przypomnienie”: dopisana przez utworzArkusz, czytana z arkusz
   dane.pozycje[3].przypomnienie = '22:45';                                 // Maść Próbna o własnej godzinie
   dane.pozycje[4].przypomnienie = 'kiedyś';                                // nieczytelne
   const env = nowe({ daneStartowe: dane }), call = env.polacz();
+  env.props.REMINDERS = JSON.stringify({ drugie: 0 });
   const m = call('refreshData');
   assert.deepEqual(m.pozycje.slice(0, 5).map(p => p.przypomnienie), ['', '', 'nie', '22:45', '']);
   assert.equal(m.warnings.length, 1); assert.match(m.warnings[0], /nie rozumiem przypomnienia „kiedyś”/);
@@ -237,4 +239,113 @@ test('stary arkusz bez kolumny „Przypomnienie”: działa, a utworzArkusz dopi
   assert.equal(sh.rows[0][15], 'Przypomnienie');
   assert.equal(env.wiersze('Pozycje').length, 7);
   assert.match(env.dziennik.join(' '), /nowa kolumna „Przypomnienie”/);
+});
+
+test('v2: drugie przypomnienie i link do aplikacji w wydarzeniu', () => {
+  const env = nowe(), call = env.polacz();
+  env.api.wlaczPrzypomnienia();
+  const rano = env.kalendarz.zdarzenia.filter(e => e.start.getDate() === 15 && /Rano/.test(e.title)).sort((a, b) => a.start - b.start);
+  assert.deepEqual(rano.map(e => e.start.getHours() + ':' + e.start.getMinutes() + ' ' + e.title), ['9:0 🌅 Rano: Testolek, Witamina Fikcyjna', '10:0 ⏰ Nadal: Rano: Testolek, Witamina Fikcyjna']);
+  assert.match(rano[0].desc, /Odhacz: https:\/\/makopako-zdrowie\.github\.io\/\?pora=rano&d=2026-11-15/);
+  call('saveReminders', { drugie: 30 });
+  assert.equal(env.kalendarz.zdarzenia.filter(e => e.start.getDate() === 15 && /Nadal: Rano/.test(e.title))[0].start.getMinutes(), 30);
+  call('logDose', { clientId: 'rem20000001', items: [{ data: DZIS, pora: 'rano', pozycja: 'P1', status: 'wzięte' }, { data: DZIS, pora: 'rano', pozycja: 'P3', status: 'wzięte' }] });
+  assert.ok(!env.kalendarz.zdarzenia.some(e => e.start.getDate() === 15 && /Rano/.test(e.title)));
+  const r = call('saveReminders', { drugie: 0 });
+  assert.equal(r.model.prefs.reminders.drugie, 0); assert.ok(!env.kalendarz.zdarzenia.some(e => /Nadal/.test(e.title)));
+  assert.equal(r.model.prefs.reminders.enabled, true);                     // zmiana drugiego nie wyłącza przypomnień
+});
+
+test('v2: getLog zwraca dziennik z okresu, także sprzed okna modelu', () => {
+  const dane = fikcyjneDane(DZIS);
+  dane.dziennikWstecz.push({ od: d(-90), do: d(-60), pozycja: 'P2', pora: 'rano', status: 'wzięte' });
+  const env = nowe({ daneStartowe: dane }), call = env.polacz();
+  let r = call('getLog', { od: d(-90), do: d(-61) });
+  assert.ok(r.ok); assert.equal(r.wpisy.length, 30); assert.ok(r.wpisy.every(w => w.pozycja === 'P2' && w.pora === 'rano'));
+  assert.equal(call('getLog', { od: d(-500), do: DZIS }).ok, false);
+  assert.equal(call('getLog', { od: DZIS, do: d(-1) }).ok, false);
+});
+
+test('v2: korekta zapasu z licznika', () => {
+  const env = nowe(), call = env.polacz();
+  let r = call('logDose', { clientId: 'kor00000001', items: [{ data: DZIS, pozycja: 'P1', status: 'korekta', ilosc: 40, godz: '10:00' }] });
+  assert.ok(r.ok);
+  const w = env.wiersze('Dziennik').slice(-1)[0];
+  assert.deepEqual([w['Status'], w['Ilość'], w['Pora']], ['korekta', 40, '']);
+  const z = L.zapasy(L.przygotuj(r.model), L.indeks(r.model.dziennik.wpisy), DZIS).filter(x => x.p.id === 'P1')[0];
+  assert.equal(z.zostalo, 40); assert.deepEqual(z.korekta, { ilosc: 40, data: DZIS });
+  assert.equal(call('logDose', { clientId: 'kor00000002', items: [{ data: DZIS, pozycja: 'P1', status: 'korekta' }] }).ok, false);
+});
+
+test('v2: korekta sprzed okna modelu trafia do stanu „przed”', () => {
+  const dane = fikcyjneDane(DZIS);
+  dane.pozycje[0].od = d(-100); dane.opakowania[0].otwarto = d(-100); dane.opakowania[0].ilosc = 500;
+  dane.dziennikWstecz = [{ od: d(-100), do: d(-1), pozycja: 'P1', pory: ['rano', 'wieczór'], status: 'wzięte' }];
+  const env = nowe({ daneStartowe: dane }), call = env.polacz();
+  // korekta 50 dni temu: licznik pokazywał 300
+  env.arkusz('Dziennik').appendRow(['KOR1', '', d(-50), '12:00', '', 'P1', 'Testolek', 'korekta', 300, '', '', '', 'test', '']);
+  env.api.onEdit();
+  const m = call('refreshData');
+  assert.deepEqual(m.opakowania[0].przed, { zuz: 2 * 9, kor: 300, korData: d(-50) });   // korekta zapisana po wpisach z tamtego dnia: liczy się 9 dni do okna
+  const z = L.zapasy(L.przygotuj(m), L.indeks(m.dziennik.wpisy), DZIS).filter(x => x.p.id === 'P1')[0];
+  assert.equal(z.zostalo, 300 - 18 - 80);
+});
+
+test('v2: nowa pozycja i terapia z aplikacji, z opakowaniem', () => {
+  const env = nowe(), call = env.polacz();
+  let r = call('saveTherapy', { nazwa: 'Okulistyka', lekarz: 'dr Zmyślony', kolor: '#123abc' });
+  assert.ok(r.ok, r.error); assert.equal(r.id, 'T3');
+  r = call('savePosition', { pola: { terapia: 'T3', nazwa: 'Krople Test', rodzaj: 'lek', postac: 'krople', dawka: '2', jednostka: 'kropla', harmonogram: 'co 2 dni', pory: 'rano+wieczór', dorazne: false, warunki: '', przypomnienie: '8:05' }, start: 'dzis', opak: { ilosc: 200, wazneDo: d(28) } });
+  assert.ok(r.ok, r.error); assert.equal(r.id, 'P8');
+  const p = env.wiersze('Pozycje')[7];
+  assert.deepEqual([p['Terapia'], p['Dawka'], p['Harmonogram'], p['Pory'], p['Od'], p['Status'], p['Przypomnienie']], ['T3', 2, 'co 2 dni', 'rano+wieczór', DZIS, 'aktywna', '08:05']);
+  const o = env.wiersze('Opakowania').slice(-1)[0];
+  assert.deepEqual([o['Pozycja'], o['Ilość w opakowaniu'], o['Ważne do'], o['Otwarto']], ['P8', 200, d(28), DZIS]);
+  assert.ok(L.dzien(L.przygotuj(r.model), L.indeks([]), DZIS).some(k => k.pozycje.some(x => x.p.id === 'P8')));
+  // błędy
+  assert.match(call('savePosition', { pola: { terapia: 'T3', nazwa: 'X', harmonogram: 'kiedyś' } }).error, /harmonogramu/);
+  assert.match(call('savePosition', { pola: { terapia: 'T3', nazwa: 'X', pory: 'północ' } }).error, /pory „północ”/);
+  assert.match(call('savePosition', { pola: { terapia: 'T9', nazwa: 'X' } }).error, /terapię/);
+  assert.match(call('savePosition', { pola: { terapia: 'T3', nazwa: 'X' }, start: 'dzis' }).error, /harmonogram/);
+  assert.match(call('addPackage', { pozycja: 'P8', ilosc: 5 }).error, /otwarte opakowanie/);
+  // planowana bez opakowania, potem usunięcie
+  r = call('savePosition', { pola: { terapia: 'T3', nazwa: 'Na później', harmonogram: 'codziennie', pory: 'rano' }, start: 'planowana' });
+  assert.equal(env.wiersze('Pozycje').slice(-1)[0]['Status'], 'planowana');
+  r = call('deletePosition', { id: r.id });
+  assert.ok(r.ok); assert.equal(env.wiersze('Pozycje').slice(-1)[0]['Status'], 'usunięta');
+  assert.ok(!r.model.pozycje.some(x => x.status === 'usunięta' && L.przygotuj(r.model).pozMap[x.id]));
+  assert.match(call('deletePosition', { id: 'P1' }).error, /tylko pozycję planowaną/);
+});
+
+test('v2: zmiana dawki tworzy nową wersję, opakowanie i zapas idą dalej; zmiana warunków w miejscu', () => {
+  const env = nowe(), call = env.polacz();
+  let r = call('savePosition', { id: 'P1', pola: { warunki: 'po jedzeniu', przypomnienie: 'nie' } });
+  assert.ok(r.ok); assert.equal(r.id, 'P1'); assert.equal(env.wiersze('Pozycje').length, 7);
+  assert.equal(env.wiersze('Pozycje')[0]['Warunki'], 'po jedzeniu');
+  r = call('savePosition', { id: 'P1', pola: { dawka: 2, warunki: 'po jedzeniu' }, od: d(1) });
+  assert.ok(r.ok, r.error); assert.equal(r.id, 'P8'); assert.ok(r.nowaWersja);
+  const [stara, nowa] = [env.wiersze('Pozycje')[0], env.wiersze('Pozycje')[7]];
+  assert.deepEqual([stara['Do'], stara['Status']], [DZIS, 'zakończona']);
+  assert.deepEqual([nowa['Od'], nowa['Dawka'], nowa['Poprzednia'], nowa['Nazwa'], nowa['Pory'], nowa['Doraźnie'], nowa['Przypomnienie'], nowa['Status']], [d(1), 2, 'P1', 'Testolek', 'rano+wieczór', 'TAK', 'nie', 'aktywna']);
+  assert.equal(env.wiersze('Opakowania')[0]['Pozycja'], 'P8');
+  const ctx = L.przygotuj(r.model), idx = L.indeks(r.model.dziennik.wpisy);
+  const z = L.zapasy(ctx, idx, DZIS).filter(x => x.opak.id === 'O1')[0];
+  assert.equal(z.p.id, 'P8'); assert.equal(z.zuzyte, 16);                  // odhaczenia starej wersji liczą się do zapasu
+  assert.ok(L.dzien(ctx, idx, DZIS)[0].pozycje.some(x => x.p.id === 'P1'));   // dziś jeszcze stara wersja
+  assert.ok(L.dzien(ctx, idx, d(1))[0].pozycje.some(x => x.p.id === 'P8' && x.p.dawkaN === 2));
+  // zmiana planu pozycji, która zaczyna się od dziś: w miejscu (bez nowej wersji)
+  call('savePosition', { pola: { terapia: 'T1', nazwa: 'Świeży', harmonogram: 'codziennie', pory: 'rano', dawka: 1 }, start: 'dzis' });
+  r = call('savePosition', { id: 'P9', pola: { dawka: 3 } });
+  assert.equal(r.id, 'P9'); assert.equal(env.wiersze('Pozycje')[8]['Dawka'], 3);
+});
+
+test('v2: zakończenie pozycji, godziny pór', () => {
+  const env = nowe(), call = env.polacz();
+  let r = call('endPosition', { id: 'P3' });
+  assert.ok(r.ok); assert.deepEqual([env.wiersze('Pozycje')[2]['Do'], env.wiersze('Pozycje')[2]['Status']], [DZIS, 'zakończona']);
+  r = call('savePory', { pory: [{ nazwa: 'Rano', godzina: '7:15', weekend: '' }, { nazwa: 'wieczór', godzina: '21:00', weekend: '22:30' }] });
+  assert.ok(r.ok, r.error);
+  assert.deepEqual(r.model.pory.map(p => p.nazwa + ' ' + p.godzina + ' ' + p.weekend), ['rano 07:15 ', 'w ciągu dnia 13:00 13:00', 'wieczór 21:00 22:30']);
+  assert.match(call('savePory', { pory: [{ nazwa: 'noc', godzina: '23:00' }] }).error, /Nie ma pory/);
+  assert.match(call('savePory', { pory: [{ nazwa: 'rano', godzina: '25:99' }] }).error, /Niepoprawna godzina/);
 });

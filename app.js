@@ -1,11 +1,12 @@
 /****************************************************************
- * ZDROWIE – ekrany (v1.0): Dziś, Terapie, Ustawienia.
+ * ZDROWIE – ekrany (v2.0): Dziś, Terapie, Ustawienia + wspólne narzędzia dla moduly.js (Historia, Raport, edycja).
  *
  * Dane przychodzą ze skryptu jako surowy model (terapie, pozycje, pory, opakowania, dziennik z ostatnich tygodni).
  * Plan dnia, tydzień i zapasy liczy tu Logika (logika.js), więc odhaczenie widać od razu, także bez internetu:
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
+ * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '1.1';
+window.CLIENT_VERSION = '2.0';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -13,14 +14,19 @@ window.CLIENT_VERSION = '1.1';
   const two = n => String(n).padStart(2, '0');
   const lsGet = k => { try { return localStorage.getItem('zdrowie.' + k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem('zdrowie.' + k, v); } catch (e) { /* bez pamięci przeglądarki */ } };
-  const TABS = ['dzis', 'terapie', 'ustawienia'];
+  const TABS = ['dzis', 'historia', 'terapie', 'raport', 'ustawienia'];
   const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.5 12.5 4.2 4.2 8.8-9.4"/></svg>';
+
+  /** Wspólne dla moduly.js. */
+  const Z = window.Zdrowie = { widoki: {}, klik: [], klikOkno: [], poRenderze: [] };
 
   let D = null, ctx = null;                 // model ze skryptu i jego przygotowana postać
   let tab = TABS.indexOf(lsGet('tab')) >= 0 ? lsGet('tab') : 'dzis';
   let recent = [];                          // operacje wysłane przed chwilą (na wypadek starszego modelu w drodze)
   let lastDay = '';
   const opened = {};                        // rozwinięte sekcje (pamiętane do zamknięcia strony)
+  const swieze = {};                        // podania odhaczone przed chwilą (animacja)
+  let blysk = { pora: '', do: 0 };          // karta pory podświetlona po wejściu z linku przypomnienia
   let devPanel = null, inited = false;
 
   /* ---------------- czas urządzenia ---------------- */
@@ -29,11 +35,13 @@ window.CLIENT_VERSION = '1.1';
   const cap = s => String(s).charAt(0).toUpperCase() + String(s).slice(1);
   const dni = n => n + (Math.abs(n) === 1 ? ' dzień' : ' dni');
   const kiedy = (data, ref) => { const k = L.num(ref) - L.num(data); return k === 0 ? 'dziś' : k === 1 ? 'wczoraj' : k === 2 ? 'przedwczoraj' : L.dataPl(data, ref); };
+  const brr = wzor => { try { if (navigator.vibrate) navigator.vibrate(wzor); } catch (e) { /* bez wibracji */ } };
 
   /* ---------------- dziennik widoczny na ekranie ---------------- */
   const idWpisu = (cid, i) => 'K' + cid + '-' + i;
-  function wpisy() {
-    const base = (D.dziennik && D.dziennik.wpisy) || [];
+  /** Dziennik z modelu (+ starsze wpisy z getLog w „starsze”) z nałożonymi operacjami z kolejki i wysłanymi przed chwilą. */
+  function wpisy(starsze) {
+    const base = (starsze || []).concat((D.dziennik && D.dziennik.wpisy) || []);
     const ids = {}, cofniete = {};
     base.forEach(w => { ids[w.id] = true; });
     const out = base.slice();
@@ -60,7 +68,7 @@ window.CLIENT_VERSION = '1.1';
   }
   function ustawModel(m) { D = m; ctx = L.przygotuj(D); przytnijRecent(); Rdzen.saveCache(D); render(); }
 
-  /* ---------------- słowa ---------------- */
+  /* ---------------- słowa i ikony ---------------- */
   const lekowe = p => p.rodzaj === 'lek' || p.rodzaj === 'suplement' || !p.rodzaj;
   const slowo = p => (lekowe(p) ? 'wzięte' : 'zrobione');
   const dawkaTxt = (p, n) => (p.dawka > 0 || n > 0 ? L.ilosc(n > 0 || n === 0 ? n : p.dawka, p.jednostka) : '');
@@ -70,8 +78,24 @@ window.CLIENT_VERSION = '1.1';
   const nazwaPory = k => { const p = ctx.poryMap[k]; return p ? p.nazwa : k; };
   const slot = (data, pora, p) => esc(data + '|' + pora + '|' + p.id);
   const zeSlotu = s => { const a = String(s).split('|'); return { data: a[0], pora: a[1], p: ctx.pozMap[a[2]] }; };
-  function opisWpisu(p, w, ref) {
+  const IKONY = {
+    inhalator: '<path d="M9 3h5v5H9z"/><path d="M7 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"/><path d="M18 14h3"/>',
+    krople: '<path d="M12 3.5s6 6.4 6 10.5a6 6 0 0 1-12 0c0-4.1 6-10.5 6-10.5z"/>',
+    tabletka: '<rect x="3.5" y="8.5" width="17" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="m9.5 9.5 5 5"/>',
+    ampulka: '<path d="M10 2.5h4v3l1.2 2V20a1.5 1.5 0 0 1-1.5 1.5h-3.4A1.5 1.5 0 0 1 8.8 20V7.5l1.2-2z"/><path d="M8.8 12h6.4"/>',
+    szampon: '<path d="M9.5 2.5h5v3h-5z"/><path d="M8.5 5.5h7l1.5 4V20a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 20V9.5z"/><path d="M7 13h10"/>',
+    sloik: '<path d="M4.5 6.5h15v3h-15z"/><path d="M5.5 9.5h13V19a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2z"/>'
+  };
+  function ikona(p) {
+    const t = String(p.postac || '').toLowerCase();
+    const k = /inhal/.test(t) ? 'inhalator' : /kropl/.test(t) ? 'krople' : /ampu/.test(t) ? 'ampulka' : /szampon|płyn|lotion/.test(t) ? 'szampon'
+      : /peel|krem|maś|masc|żel|zel|maska/.test(t) || p.rodzaj === 'kosmetyk' || p.rodzaj === 'zabieg' ? 'sloik' : 'tabletka';
+    return `<i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24">${IKONY[k]}</svg></i>`;
+  }
+  function opisWpisu(p, w) {
     if (!w) return '';
+    if (w.status === 'korekta') return 'korekta zapasu: zostało ' + dawkaTxt(p, w.ilosc);
+    if (w.status === 'doraźnie') return 'doraźnie' + (w.godz ? ' o ' + w.godz : '') + ' · ' + dawkaTxt(p, w.ilosc);
     const st = L.stanWpisu(w);
     if (st === 'wziete') return slowo(p) + (w.godz ? ' o ' + w.godz : '') + (w.ilosc > 0 && w.ilosc !== p.dawkaN ? ' · ' + dawkaTxt(p, w.ilosc) : '') + (w.pozniej ? ' · wpisane po fakcie' : '');
     if (st === 'pominiete') return 'pominięte' + (w.powod ? ': ' + w.powod : '');
@@ -89,17 +113,22 @@ window.CLIENT_VERSION = '1.1';
   function zapisz(items, komunikat) {
     const cid = Rdzen.outbox.add('logDose', { items: items }, komunikat);
     const ids = items.map((_, i) => idWpisu(cid, i));
+    const t = Date.now();
+    items.forEach(it => { if (it.status === 'wzięte') swieze[L.kluczSlotu(it.data, it.pora, it.pozycja)] = t; });
+    brr(items.length > 1 ? [18, 60, 18] : 18);
     render();
     toast(esc(komunikat), () => cofnij(ids));
   }
   function cofnij(ids) {
     Rdzen.outbox.add('undoDose', { ids: ids }, 'Cofnięcie');
+    brr(10);
     render();
     toast('Cofnięte.');
   }
-  /** Rzadkie operacje wprost do skryptu (wymagają internetu). */
-  async function wyslij(fn, arg, btn, okMsg) {
+  /** Rzadkie operacje wprost do skryptu (wymagają internetu). Błąd: w polu errEl (formularz) albo w toaście. */
+  async function wyslij(fn, arg, btn, okMsg, errEl) {
     if (btn) btn.disabled = true;
+    if (errEl) errEl.textContent = '';
     try {
       const r = await Rdzen.api(fn, arg);
       if (!r || !r.ok) throw new Error((r && r.error) || 'Nie udało się.');
@@ -107,16 +136,17 @@ window.CLIENT_VERSION = '1.1';
       if (okMsg) toast(okMsg);
       return r;
     } catch (e) {
-      toast('Nie udało się: ' + esc(e.message || e));
+      if (errEl && errEl.isConnected) errEl.textContent = e.message || String(e);
+      else toast('Nie udało się: ' + esc(e.message || e));
       return null;
     } finally { if (btn && btn.isConnected) btn.disabled = false; }
   }
   /** Potwierdzanie drugim dotknięciem: pierwsze uzbraja przycisk na 4 sekundy. */
   function uzbrojony(btn, tekst) {
     if (btn.dataset.armed) return true;
-    const stary = btn.textContent;
+    const stary = btn.innerHTML;
     btn.dataset.armed = '1'; btn.textContent = tekst;
-    setTimeout(() => { if (btn.isConnected && btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = stary; } }, 4000);
+    setTimeout(() => { if (btn.isConnected && btn.dataset.armed) { delete btn.dataset.armed; btn.innerHTML = stary; } }, 4000);
     return false;
   }
 
@@ -139,23 +169,28 @@ window.CLIENT_VERSION = '1.1';
     if ((D.warnings || []).length) li.push(`<li><span class="ico" aria-hidden="true">i</span><span>Arkusz wymaga poprawek (${D.warnings.length}). <button type="button" class="linkish" data-tab="ustawienia">Zobacz w Ustawieniach</button></span></li>`);
     return li.length ? `<ul class="alerts">${li.join('')}</ul>` : '';
   }
+  /** Przycisk z prawej: „⋯” (więcej) dla nieodhaczonych, „↶” (cofnij, dwa dotknięcia) dla odhaczonych. */
+  const przyciskBoczny = (x, s, nazwa) => (x.wpis
+    ? `<button type="button" class="it-more undo" data-undo="${esc(x.wpis.id)}" aria-label="Cofnij: ${esc(nazwa)}">↶</button>`
+    : `<button type="button" class="it-more" data-more="${s}" aria-label="Więcej: ${esc(nazwa)}">⋯</button>`);
   function wiersz(x, data) {
-    const p = x.p, opis = opisWpisu(p, x.wpis, data), sub = podpis(p);
+    const p = x.p, opis = opisWpisu(p, x.wpis), sub = podpis(p), s = slot(data, x.pora, p);
     const lab = x.stan === 'do' ? `${p.nazwa}${sub ? ', ' + sub : ''}: oznacz jako ${slowo(p)}` : `${p.nazwa}: ${opis}. Szczegóły`;
-    return `<li class="item st-${x.stan}${x.wpis && x.wpis.czeka ? ' pending' : ''}" style="--c:${kolor(p)}">
-      <button type="button" class="it-main" data-take="${slot(data, x.pora, p)}" aria-label="${esc(lab)}">
+    const just = swieze[L.kluczSlotu(data, x.pora, p.id)] > Date.now() - 1500 ? ' just' : '';
+    return `<li class="item st-${x.stan}${x.wpis && x.wpis.czeka ? ' pending' : ''}${just}" style="--c:${kolor(p)}">
+      <button type="button" class="it-main" data-take="${s}" aria-label="${esc(lab)}">
         <span class="chk" aria-hidden="true">${x.stan === 'pominiete' ? '–' : x.stan === 'niewiem' ? '?' : CHECK}</span>
-        <span class="it-txt"><b>${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${opis ? `<em>${esc(opis)}</em>` : ''}</span>
-      </button>
-      <button type="button" class="it-more" data-more="${slot(data, x.pora, p)}" aria-label="Więcej: ${esc(p.nazwa)}">⋯</button></li>`;
+        <span class="it-txt"><b>${ikona(p)}${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${opis ? `<em>${esc(opis)}</em>` : ''}</span>
+      </button>${przyciskBoczny(x, s, p.nazwa)}</li>`;
   }
   function kartaPory(k, S) {
     const razem = k.pozycje.length, zrobione = razem - k.doZrobienia, id = 'pora-' + k.klucz;
+    const fl = blysk.pora === k.klucz && blysk.do > Date.now() ? ' flash' : '';
     const lista = `<ul class="items">${k.pozycje.map(x => wiersz(x, S.dzis)).join('')}</ul>`;
     if (!k.doZrobienia) {
-      return `<details class="card pora done" data-key="${esc(id)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
+      return `<details class="card pora done${fl}" data-key="${esc(id)}" data-pora="${esc(k.klucz)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
     }
-    return `<section class="card pora"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
+    return `<section class="card pora${fl}" data-pora="${esc(k.klucz)}"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
       ${lista}${k.doZrobienia >= 2 ? `<button type="button" class="all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
   }
   function kartaZalegle(S) {
@@ -185,19 +220,21 @@ window.CLIENT_VERSION = '1.1';
       if (!gotowe) info += t.wpisDzis ? '' : t.prefDzis ? ' · najlepiej dziś' : t.prefMinal ? ' · czeka do niedzieli' : p.h.pref.length ? ' · najlepiej ' + p.h.pref.map(d => L.DNI_W[d]).join(' i ') : t.dniDoKonca === 0 ? ' · dziś ostatni dzień' : '';
       const st = gotowe || t.wpisDzis ? (t.wpisDzis ? L.stanWpisu(t.wpisDzis) : 'wziete') : 'do';
       const sub = podpis(p);
-      return `<li class="item st-${st}" style="--c:${kolor(p)}">
+      const bok = t.wpisDzis ? `<button type="button" class="it-more undo" data-undo="${esc(t.wpisDzis.id)}" aria-label="Cofnij: ${esc(p.nazwa)}">↶</button>`
+        : `<button type="button" class="it-more" data-week-more="${esc(p.id)}" aria-label="Więcej: ${esc(p.nazwa)}">⋯</button>`;
+      const just = swieze[L.kluczSlotu(S.dzis, t.pora, p.id)] > Date.now() - 1500 ? ' just' : '';
+      return `<li class="item st-${st}${just}" style="--c:${kolor(p)}">
         <button type="button" class="it-main" data-week="${esc(p.id)}" aria-label="${esc(p.nazwa)}: ${esc(info)}">
           <span class="chk" aria-hidden="true">${st === 'pominiete' ? '–' : CHECK}</span>
-          <span class="it-txt"><b>${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}<em>${esc(info)}</em></span>
-        </button>
-        <button type="button" class="it-more" data-week-more="${esc(p.id)}" aria-label="Więcej: ${esc(p.nazwa)}">⋯</button></li>`;
+          <span class="it-txt"><b>${ikona(p)}${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}<em>${esc(info)}</em></span>
+        </button>${bok}</li>`;
     }).join('');
     return `<section class="card week" aria-labelledby="h-week"><header class="card-head"><h2 id="h-week">W tym tygodniu</h2></header><ul class="items">${wiersze}</ul></section>`;
   }
   function kartaDorazne(S) {
     if (!S.dorazne.length) return '';
     return `<section class="card adhoc" aria-labelledby="h-adhoc"><header class="card-head"><h2 id="h-adhoc">Doraźnie</h2></header>${S.dorazne.map(d =>
-      `<div class="row"><div><b>${esc(d.p.nazwa)}</b><small>dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</small></div><button type="button" class="btn-add" data-adhoc="${esc(d.p.id)}">+ Użyłem</button></div>`).join('')}</section>`;
+      `<div class="row"><div><b>${ikona(d.p)}${esc(d.p.nazwa)}</b><small>dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</small></div><button type="button" class="btn-add" data-adhoc="${esc(d.p.id)}">+ Użyłem</button></div>`).join('')}</section>`;
   }
   const moznaZaczac = p => p.h.typ !== 'blad' && (p.h.typ !== 'brak' || p.dorazne);
   function kartaPlanowane() {
@@ -205,9 +242,21 @@ window.CLIENT_VERSION = '1.1';
     if (!lista.length) return '';
     return `<details class="card planned" data-key="planowane"${opened.planowane ? ' open' : ''}><summary><h2>Planowane</h2><span class="cnt num">${lista.length}</span></summary>${lista.map(p => {
       const ok = moznaZaczac(p), opis = ok ? [L.opisHarmonogramu(p.h), p.poryN.join(' i '), dawkaTxt(p)].filter(Boolean).join(' · ') : '';
-      return `<div class="row"><div><b>${esc(p.nazwa)}</b>${opis ? `<small>${esc(opis)}</small>` : ''}${p.uwagi ? `<small>${esc(p.uwagi)}</small>` : ''}${ok ? '' : '<small class="warn-line">Najpierw uzupełnij w arkuszu harmonogram i dawkę.</small>'}</div>
-        ${ok ? `<button type="button" class="btn-sm" data-start="${esc(p.id)}">Zaczynam od dziś</button>` : ''}</div>`;
+      return `<div class="row"><div><b>${ikona(p)}${esc(p.nazwa)}</b>${opis ? `<small>${esc(opis)}</small>` : ''}${p.uwagi ? `<small>${esc(p.uwagi)}</small>` : ''}${ok ? '' : '<small class="warn-line">Najpierw uzupełnij harmonogram i dawkę.</small>'}</div>
+        ${ok ? `<button type="button" class="btn-sm" data-start="${esc(p.id)}">Zaczynam od dziś</button>` : `<button type="button" class="btn-sm" data-edit-p="${esc(p.id)}">Uzupełnij</button>`}</div>`;
     }).join('')}</details>`;
+  }
+  /** Ostatnie 7 dni w kratkach i seria dni bez pominięcia. Dotknięcie otwiera Historię. */
+  function pasekTygodnia(S) {
+    const kratki = [];
+    for (let k = 6; k >= 0; k--) {
+      const d = L.plus(S.dzis, -k), st = L.stanDnia(ctx, S.idx, d, S.dzis).st;
+      kratki.push(`<span class="d7 st-${st}${k === 0 ? ' today' : ''}"><i>${L.DNI_SKROT[L.dzienTyg(d)]}</i></span>`);
+    }
+    const s = L.seria(ctx, S.idx, S.dzis, D.dziennik && D.dziennik.od);
+    const txt = s.dni >= 2 ? `<b>${s.wiecej ? 'ponad ' : ''}${dni(s.dni)}</b> z rzędu bez pominięcia` : 'Ostatnie 7 dni';
+    return `<button type="button" class="week7" data-tab="historia" aria-label="Ostatnie 7 dni. ${esc(txt.replace(/<[^>]+>/g, ''))}. Otwórz historię">
+      <span class="d7s">${kratki.join('')}</span><span class="w7t">${txt} ›</span></button>`;
   }
   function viewDzis(S) {
     let razem = 0, zostalo = 0;
@@ -215,11 +264,11 @@ window.CLIENT_VERSION = '1.1';
     S.tydzien.forEach(t => { if (t.prefDzis || t.wpisDzis) { razem++; if (!t.wpisDzis && t.zostalo > 0) zostalo++; } });
     const maCos = razem || S.tydzien.length || S.dorazne.length || S.zalegle.length || ctx.pozycje.some(p => p.status === 'planowana');
     if (!maCos) {
-      return alerty(S) + `<div class="empty"><b>Nie ma jeszcze nic do odhaczania</b>Dodaj terapie i pozycje w arkuszu (zakładki Terapie i Pozycje), a potem odśwież.</div>`;
+      return alerty(S) + `<div class="empty"><b>Nie ma jeszcze nic do odhaczania</b>Dodaj terapię i pozycje w zakładce Terapie.<div class="dev-acts center"><button type="button" class="btn-sm primary" data-tab="terapie">Przejdź do Terapii</button></div></div>`;
     }
-    const lead = !razem ? 'Na dziś nic nie ma w planie.' : !zostalo ? '<strong>Na dziś wszystko odhaczone.</strong>' : `Dziś zostało <strong>${zostalo} z ${razem}</strong>.`;
+    const lead = !razem ? 'Na dziś nic nie ma w planie.' : !zostalo ? '<strong class="done-lead">Na dziś wszystko odhaczone.</strong>' : `Dziś zostało <strong>${zostalo} z ${razem}</strong>.`;
     const prog = razem ? `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${razem}" aria-valuenow="${razem - zostalo}" aria-label="Odhaczone dziś"><span style="width:${Math.round(100 * (razem - zostalo) / razem)}%"></span></div>` : '';
-    return alerty(S) + `<p class="lead">${lead}</p>${prog}` + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
+    return alerty(S) + `<p class="lead">${lead}</p>${prog}` + pasekTygodnia(S) + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
   }
 
   /* ================= ekran Terapie ================= */
@@ -228,29 +277,33 @@ window.CLIENT_VERSION = '1.1';
     const o = z.opak;
     let txt, pct = null;
     if (z.znane) {
-      pct = Math.max(0, Math.min(100, Math.round(100 * z.zostalo / z.razem)));
-      txt = `Zostało <b>${esc(L.liczba(Math.max(0, z.zostalo)))} z ${esc(L.ilosc(z.razem, z.p.jednostka))}</b>`;
+      if (z.razem) {
+        pct = Math.max(0, Math.min(100, Math.round(100 * z.zostalo / Math.max(z.razem, z.korekta ? z.korekta.ilosc : 0))));
+        txt = `Zostało <b>${esc(L.liczba(Math.max(0, z.zostalo)))} z ${esc(L.ilosc(z.razem, z.p.jednostka))}</b>`;
+      } else txt = `Zostało <b>${esc(dawkaTxt(z.p, Math.max(0, z.zostalo)))}</b>`;
       if (z.koniecDawek) txt += z.zostalo <= 0 ? ' · według odhaczeń puste' : ` · wystarczy do ${esc(z.dniDoKonca === 0 && z.powod === 'dawki' ? 'dziś' : L.dataPl(z.koniecDawek, S.dzis))}`;
+      if (z.korekta) txt += ` · stan poprawiony ${esc(kiedy(z.korekta.data, S.dzis))}`;
     } else {
       txt = `Otwarte <b>${z.otwarteDni === 0 ? 'dziś' : dni(z.otwarteDni) + ' temu'}</b>, ilość nieznana`;
       if (z.powod === 'prognoza') txt += ` · poprzednie starczały na około ${dni(z.sredniaDni)}, czyli do około ${esc(L.dataPl(z.koniec, S.dzis))}`;
     }
     if (o.wazneDo) txt += ` · ${z.poTerminie ? 'po terminie od' : 'ważne do'} ${esc(L.dataPl(o.wazneDo, S.dzis))}`;
     return `<div class="stock${z.alert ? ' low' : ''}">${pct === null ? '' : `<div class="track" aria-hidden="true"><span style="width:${pct}%"></span></div>`}
-      <div class="stock-txt">${txt}</div><div class="acts"><button type="button" class="edit" data-finish="${esc(o.id)}">Skończyło się</button></div></div>`;
+      <div class="stock-txt">${txt}</div><div class="acts"><button type="button" class="edit" data-fix="${esc(o.id)}">Popraw stan</button><button type="button" class="edit" data-finish="${esc(o.id)}">Skończyło się</button></div></div>`;
   }
   function pozycjaHtml(p, S, zap, dor) {
     const opis = [dawkaTxt(p), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h), p.poryN.map(nazwaPory).join(' i '), opisPrzyp(p)].filter(Boolean).join(' · ');
     const badge = p.status === 'planowana' ? '<span class="badge plan">planowana</span>' : p.status !== 'aktywna' ? '<span class="badge end">zakończona</span>' : '';
     const okres = p.status === 'aktywna' ? (p.od ? 'od ' + L.dataPl(p.od, S.dzis) : '') : [p.od ? L.dataPl(p.od, S.dzis) : '', p.do ? L.dataPl(p.do, S.dzis) : ''].filter(Boolean).join(' – ');
-    const d = dor[p.id];
-    return `<div class="pos"><div class="nm"><b>${esc(p.nazwa)}</b>${badge}</div>
+    const d = dor[p.id], z = zap[p.id];
+    const brakOpak = p.status === 'aktywna' && !z ? `<div class="acts"><button type="button" class="edit" data-add-pack="${esc(p.id)}">+ Opakowanie</button></div>` : '';
+    return `<div class="pos"><div class="nm"><b>${ikona(p)}${esc(p.nazwa)}</b>${badge}${p.status !== 'zakończona' ? `<button type="button" class="edit pos-edit" data-edit-p="${esc(p.id)}">Edytuj</button>` : ''}</div>
       ${p.status === 'zakończona' ? '' : `<p>${esc(opis)}</p>`}
       ${p.warunki && p.status !== 'zakończona' ? `<p>${esc(p.warunki)}</p>` : ''}
       ${okres ? `<p class="note">${esc(okres)}</p>` : ''}
       ${d ? `<p>Doraźnie: dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</p>` : ''}
       ${p.uwagi ? `<p class="note">${esc(p.uwagi)}</p>` : ''}
-      ${zapasHtml(zap[p.id], S)}</div>`;
+      ${zapasHtml(z, S)}${brakOpak}</div>`;
   }
   function viewTerapie(S) {
     const zap = {}, dor = {};
@@ -259,33 +312,46 @@ window.CLIENT_VERSION = '1.1';
     const grupy = (D.terapie || []).map(t => ({ t: t, poz: ctx.pozycje.filter(p => p.terapia === t.id) }));
     const bez = ctx.pozycje.filter(p => !ctx.terapie[p.terapia]);
     if (bez.length) grupy.push({ t: { id: '', nazwa: 'Bez terapii', kolor: '' }, poz: bez });
-    if (!grupy.length) return `<div class="empty"><b>Nie ma jeszcze terapii</b>Dodaj je w arkuszu, w zakładce Terapie.</div>`;
+    const nowa = `<div class="dev-acts center"><button type="button" class="btn-sm primary" data-new-t>+ Nowa terapia</button></div>`;
+    if (!grupy.length) return `<div class="empty"><b>Nie ma jeszcze terapii</b>Terapia to lekarz albo obszar leczenia, np. „Pulmonologia”. Do niej dodasz leki i zabiegi.${nowa}</div>`;
     return grupy.map(g => {
       const t = g.t, akt = g.poz.filter(p => p.status !== 'zakończona'), zak = g.poz.filter(p => p.status === 'zakończona');
       const sub = [t.lekarz, t.specjalizacja, t.uwagi].filter(Boolean).join(' · '), key = 'zak-' + t.id;
-      return `<section class="card" style="--c:${t.kolor || 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2></div>
+      return `<section class="card" style="--c:${t.kolor || 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj</button>` : ''}</div>
         ${sub ? `<p class="th-sub">${esc(sub)}</p>` : ''}
         ${akt.map(p => pozycjaHtml(p, S, zap, dor)).join('') || '<div class="pos"><p>Brak aktywnych pozycji.</p></div>'}
+        ${t.id ? `<div class="th-add"><button type="button" class="btn-sm" data-new-p="${esc(t.id)}">+ Lek, suplement albo zabieg</button></div>` : ''}
         ${zak.length ? `<details class="more" data-key="${esc(key)}"${opened[key] ? ' open' : ''}><summary>Zakończone (${zak.length})</summary>${zak.map(p => pozycjaHtml(p, S, zap, dor)).join('')}</details>` : ''}</section>`;
-    }).join('');
+    }).join('') + nowa;
   }
 
   /* ================= ekran Ustawienia ================= */
+  const SKORKI = [['klasyczny', 'Klasyczny', '#0c1519', '#2fbf93'], ['jasny', 'Jasny', '#f3f6f5', '#13916c'], ['neon', 'Neon', '#07070c', '#00e5ff'],
+    ['synthwave', 'Synthwave', '#1b0b2e', '#ff6ad5'], ['racer', 'Racer', '#ece6da', '#d9361e']];
   function viewUstawienia() {
     const r = (D.prefs && D.prefs.reminders) || {};
     const kiedySync = r.lastSync ? (() => { const d = new Date(r.lastSync); return two(d.getHours()) + ':' + two(d.getMinutes()); })() : '';
-    const pory = ctx.pory.map(p => `<li>${esc(cap(p.nazwa))}: <span class="num">${esc(p.godzina || 'bez godziny')}</span>${p.weekend && p.weekend !== p.godzina ? `, w weekend <span class="num">${esc(p.weekend)}</span>` : ''}</li>`).join('');
-    const czeka = Rdzen.outbox.list().length;
+    const pory = ctx.pory.map(p => `<div class="pora-row"><b>${esc(cap(p.nazwa))}</b>
+      <label><span>w tygodniu</span><input type="time" data-pora-g="${esc(p.nazwa)}" value="${esc(p.godzina || '')}"></label>
+      <label><span>w weekend</span><input type="time" data-pora-w="${esc(p.nazwa)}" value="${esc(p.weekend || '')}"></label></div>`).join('');
+    const drugie = isFinite(r.drugie) ? +r.drugie : 60;
+    const czeka = Rdzen.outbox.list().length, skin = window.SKIN || 'klasyczny';
     return `<section class="panel" aria-labelledby="h-rem"><div class="panel-head"><div><h2 id="h-rem">Przypomnienia</h2>
-        <p class="desc">Kalendarz Google „${esc(r.calendar || 'Zdrowie – przypomnienia')}”: jedno wydarzenie na porę dnia z powiadomieniem. Znika, gdy wszystko z pory jest odhaczone. Inną godzinę albo „nie” dla pojedynczej pozycji wpisujesz w arkuszu, w kolumnie „Przypomnienie”.</p></div>
+        <p class="desc">Kalendarz Google „${esc(r.calendar || 'Zdrowie – przypomnienia')}”: wydarzenie o godzinie pory, z linkiem do aplikacji. Znika, gdy wszystko z pory jest odhaczone. Własną godzinę albo „bez przypomnienia” ustawiasz w edycji pozycji.</p></div>
         <button type="button" class="btn-sm${r.enabled ? '' : ' primary'}" data-rem="${r.enabled ? '0' : '1'}">${r.enabled ? 'Wyłącz' : 'Włącz'}</button></div>
       <p class="line">${r.enabled ? `Włączone. Wydarzeń w kalendarzu: ${r.count || 0}${kiedySync ? ', ostatnia zmiana ' + kiedySync : ''}.` : 'Wyłączone.'}</p>
       ${r.error ? `<p class="err">${esc(r.error)}</p>` : ''}
-      <ul class="plain">${pory}</ul>
-      <p class="hint-avg">Godziny pór zmieniasz w arkuszu, w zakładce Pory dnia. Pierwsze włączenie: w Apps Script uruchom raz funkcję wlaczPrzypomnienia (zgoda na Kalendarz).</p></section>
+      <h3 class="sh-h">Przypomnij jeszcze raz, jeśli nie odhaczę</h3>
+      <div class="chips" role="group" aria-label="Drugie przypomnienie">${[[0, 'nie'], [30, 'po 30 min'], [60, 'po godzinie'], [120, 'po 2 godz.']].map(x => `<button type="button" data-drugie="${x[0]}" aria-pressed="${drugie === x[0]}">${x[1]}</button>`).join('')}</div>
+      <h3 class="sh-h">Pory dnia</h3>${pory}
+      <p class="err" id="poryErr"></p>
+      <div class="dev-acts"><button type="button" class="btn-sm" data-pory-save>Zapisz godziny</button></div>
+      <p class="hint-avg">Puste „w weekend” = jak w tygodniu. Pierwsze włączenie przypomnień: w Apps Script uruchom raz funkcję wlaczPrzypomnienia (zgoda na Kalendarz).</p></section>
+    <section class="panel" aria-labelledby="h-skin"><h2 id="h-skin">Wygląd</h2><p class="desc">Zapamiętany osobno na każdym urządzeniu.</p>
+      <div class="skins">${SKORKI.map(s => `<button type="button" class="skin" data-skin="${s[0]}" aria-pressed="${skin === s[0]}"><span class="sw" style="background:${s[2]}"><i style="background:${s[3]}"></i></span>${s[1]}</button>`).join('')}</div></section>
     ${devPanel.html()}
-    <section class="panel" aria-labelledby="h-ark"><h2 id="h-ark">W arkuszu</h2>
-      <p class="desc">Na razie tylko w arkuszu zmieniasz: terapie, pozycje (dawka, harmonogram, pory), pory dnia i opakowania. Zmiana dawki albo leku: starej pozycji wpisz datę „Do” i status „zakończona”, a nową dodaj w nowym wierszu.</p>
+    <section class="panel" aria-labelledby="h-ark"><h2 id="h-ark">Arkusz</h2>
+      <p class="desc">Wszystko z aplikacji trafia do arkusza Google. Możesz tam też poprawiać dane ręcznie: aplikacja odczyta je po odświeżeniu.</p>
       ${(D.warnings || []).length ? `<p class="line"><b>Do poprawienia:</b></p><ul class="plain">${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="line">Arkusz nie ma uwag.</p>'}
       ${D.sheetUrl ? `<div class="dev-acts"><a class="btn-sm" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">Otwórz arkusz</a></div>` : ''}</section>
     <section class="panel" aria-labelledby="h-app"><h2 id="h-app">Aplikacja</h2>
@@ -300,12 +366,15 @@ window.CLIENT_VERSION = '1.1';
     lastDay = S.dzis;
     $('abSub').textContent = L.DNI[L.dzienTyg(S.dzis)] + ', ' + L.dataPl(S.dzis);
     const para = $('pairBox'), zachowaj = para && !para.hidden ? para : null;      // kod parowania przeżywa odświeżenie ekranu
-    app.innerHTML = tab === 'terapie' ? viewTerapie(S) : tab === 'ustawienia' ? viewUstawienia() : viewDzis(S);
+    const aktywny = document.activeElement && app.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if (aktywny) return;                                                           // nie kasujemy tego, co ktoś właśnie wpisuje
+    app.innerHTML = Z.widoki[tab] ? Z.widoki[tab](S) : tab === 'terapie' ? viewTerapie(S) : tab === 'ustawienia' ? viewUstawienia() : viewDzis(S);
     if (zachowaj && $('pairBox')) $('pairBox').replaceWith(zachowaj);
     document.querySelectorAll('[data-tab]').forEach(b => { if (b.closest('#tabbar') || b.classList.contains('ib')) { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); } });
     $('gearDot').classList.toggle('on', devPanel.newOnes().length > 0);
     const a = $('abSheet');
     if (D.sheetUrl) { a.href = D.sheetUrl; a.hidden = false; } else a.hidden = true;
+    Z.poRenderze.forEach(f => { try { f(S); } catch (e) { /* moduł nie psuje ekranu */ } });
   }
   function idz(t) {
     if (TABS.indexOf(t) < 0) return;
@@ -317,10 +386,10 @@ window.CLIENT_VERSION = '1.1';
   function otworz(tytul, html, c) {
     $('sheetTitle').textContent = tytul; $('sheetBody').innerHTML = html; sheetCtx = c || {};
     $('toast').classList.remove('on');
-    if (sheetOn) return;
+    if (sheetOn) { $('sheet').scrollTop = 0; return; }
     sheetOn = true; wrocDo = document.activeElement;
     const s = $('sheet'), bg = $('sheetBg');
-    s.hidden = false; bg.hidden = false;
+    s.hidden = false; bg.hidden = false; s.scrollTop = 0;
     requestAnimationFrame(() => { s.classList.add('open'); bg.classList.add('open'); });
     try { history.pushState({ okno: 1 }, ''); } catch (e) { /* bez historii */ }
     s.focus({ preventScroll: true });
@@ -344,26 +413,27 @@ window.CLIENT_VERSION = '1.1';
     toastTimer = setTimeout(() => t.classList.remove('on'), undo ? 6000 : 3500);
   }
 
-  /* ---------------- okna: podanie, tydzień, doraźne, opakowanie ---------------- */
+  /* ---------------- okna: podanie, tydzień, doraźne, opakowanie, korekta ---------------- */
   const POWODY = p => ['zapomniałem', lekowe(p) ? 'brak leku' : 'skończyło się', 'zalecenie lekarza', 'inne'];
   const krok = p => (p.dawkaN % 1 ? 0.5 : 1);
-  function poleIlosci(p) {
+  function poleIlosci(p, wartosc, etykieta) {
+    const v = wartosc === undefined ? p.dawkaN : wartosc;
     return `<div class="qty"><button type="button" data-q="-1" aria-label="Mniej">−</button>
-      <label><span class="sr">Ilość</span><input id="shQty" inputmode="decimal" autocomplete="off" value="${esc(String(p.dawkaN).replace('.', ','))}"><em>${esc(L.jednostka(p.dawkaN, p.jednostka))}</em></label>
+      <label><span class="sr">${esc(etykieta || 'Ilość')}</span><input id="shQty" inputmode="decimal" autocomplete="off" value="${esc(String(v).replace('.', ','))}"><em>${esc(L.jednostka(5, p.jednostka))}</em></label>
       <button type="button" data-q="1" aria-label="Więcej">+</button></div>`;
   }
   const czytajIlosc = p => { const n = Number(String($('shQty') ? $('shQty').value : '').replace(',', '.')); return n >= 0 && n <= 100000 && isFinite(n) && String($('shQty').value).trim() !== '' ? n : p.dawkaN; };
   const notatka = () => ($('shNote') ? $('shNote').value.trim().slice(0, 200) : '');
 
   /** Okno jednego podania: do odhaczenia (ilość, notatka, pominięcie z powodem) albo już odhaczonego (cofnięcie). */
-  function oknoPodania(s, tryb) {
-    const S = stan(), p = s.p;
+  function oknoPodania(s, tryb, idx) {
+    const t = dzis(), p = s.p;
     if (!p) return;
-    const w = S.idx.sloty[L.kluczSlotu(s.data, s.pora, p.id)] || null;
-    const gdzie = `${nazwaPory(s.pora)}, ${kiedy(s.data, S.dzis)}`;
+    const w = (idx || stan().idx).sloty[L.kluczSlotu(s.data, s.pora, p.id)] || null;
+    const gdzie = `${nazwaPory(s.pora)}, ${kiedy(s.data, t)}`;
     const sub = `<p class="sh-sub">${esc([podpis(p), gdzie].filter(Boolean).join(' · '))}</p>`;
     if (w) {
-      otworz(p.nazwa, `${sub}<div class="sh-state">${esc(cap(opisWpisu(p, w, S.dzis)))}${w.notatka ? `<small>${esc(w.notatka)}</small>` : ''}${w.czeka ? '<small>Czeka na wysłanie do arkusza.</small>' : ''}</div>
+      otworz(p.nazwa, `${sub}<div class="sh-state">${esc(cap(opisWpisu(p, w)))}${w.notatka ? `<small>${esc(w.notatka)}</small>` : ''}${w.czeka ? '<small>Czeka na wysłanie do arkusza.</small>' : ''}</div>
         <button type="button" class="danger" data-sh-undo="${esc(w.id)}">Cofnij odhaczenie</button>`, s);
       return;
     }
@@ -377,7 +447,7 @@ window.CLIENT_VERSION = '1.1';
     const pon = L.poczatekTyg(S.dzis);
     const lista = S.idx.lista.filter(w => w.pozycja === p.id && w.data >= pon && w.data <= L.plus(pon, 6));
     const wpisyHtml = lista.length ? `<h3 class="sh-h">W tym tygodniu</h3><ul class="uses">${lista.map(w =>
-      `<li><span>${esc(cap(kiedy(w.data, S.dzis)))}: ${esc(opisWpisu(p, w, S.dzis))}</span><button type="button" class="edit warn-txt" data-sh-undo="${esc(w.id)}">Cofnij</button></li>`).join('')}</ul>` : '';
+      `<li><span>${esc(cap(kiedy(w.data, S.dzis)))}: ${esc(opisWpisu(p, w))}</span><button type="button" class="edit warn-txt" data-sh-undo="${esc(w.id)}">Cofnij</button></li>`).join('')}</ul>` : '';
     const s = { data: S.dzis, pora: t.pora, p: p };
     const mozna = t.zostalo > 0 && !t.wpisDzis;
     otworz(p.nazwa, `<p class="sh-sub">${esc([dawkaTxt(p), L.opisHarmonogramu(p.h)].filter(Boolean).join(' · '))}</p>
@@ -395,16 +465,42 @@ window.CLIENT_VERSION = '1.1';
       <label class="field"><span>Notatka (nieobowiązkowa)</span><input id="shNote" maxlength="200" autocomplete="off" placeholder="np. co się działo"></label>
       <button type="button" class="save" data-sh-adhoc>Zapisz użycie</button>${lista}`, { p: p });
   }
+  /** Wybór pozycji doraźnej (skrót z ikony aplikacji, gdy jest ich kilka). */
+  function oknoWyboruDoraznej() {
+    const lista = stan().dorazne;
+    if (!lista.length) { toast('Nie masz pozycji z użyciem doraźnym. Zaznaczysz to w edycji pozycji.'); return; }
+    if (lista.length === 1) { oknoDorazne(lista[0].p); return; }
+    otworz('Użycie doraźne', `<div class="chips col">${lista.map(d => `<button type="button" data-adhoc="${esc(d.p.id)}">${esc(d.p.nazwa)}</button>`).join('')}</div>`, {});
+  }
   function oknoOpakowania(id) {
     const S = stan(), z = S.zapasy.filter(x => x.opak.id === id)[0];
     if (!z) return;
     const p = z.p, o = z.opak;
     otworz(p.nazwa + ': skończyło się', `<p class="sh-sub">Opakowanie otwarte ${esc(o.otwarto ? L.dataPl(o.otwarto, S.dzis) : 'nie wiadomo kiedy')}. Zapisuję, że skończyło się dziś.</p>
       <h3 class="sh-h">Nowe opakowanie</h3>
-      <label class="field"><span>Ile jest w nowym opakowaniu${p.jednostka ? ' (' + esc(L.jednostka(5, p.jednostka)) + ')' : ''}? Puste = nie wiem</span><input id="shPack" inputmode="decimal" autocomplete="off" value="${z.znane ? esc(String(z.razem).replace('.', ',')) : ''}"></label>
+      <label class="field"><span>Ile jest w nowym opakowaniu${p.jednostka ? ' (' + esc(L.jednostka(5, p.jednostka)) + ')' : ''}? Puste = nie wiem</span><input id="shPack" inputmode="decimal" autocomplete="off" value="${z.razem ? esc(String(z.razem).replace('.', ',')) : ''}"></label>
       <label class="field"><span>Ważne do (jeśli jest termin po otwarciu)</span><input id="shExp" type="date"></label>
+      <p class="err" id="shErr"></p>
       <button type="button" class="save" data-sh-finish="nowe">Skończyło się, otwieram nowe</button>
       <button type="button" class="second" data-sh-finish="bez">Skończyło się, nowego jeszcze nie mam</button>`, { opak: id, p: p });
+  }
+  /** Korekta zapasu: „licznik pokazuje 92”. Zapis przez kolejkę (działa też bez internetu). */
+  function oknoKorekty(id) {
+    const S = stan(), z = S.zapasy.filter(x => x.opak.id === id)[0];
+    if (!z) return;
+    const p = z.p, teraz0 = z.znane ? Math.max(0, z.zostalo) : '';
+    otworz(p.nazwa + ': popraw stan', `<p class="sh-sub">Ile zostało w opakowaniu teraz? Np. licznik na inhalatorze albo policzone tabletki. Od tej chwili aplikacja liczy od tej liczby.</p>
+      ${poleIlosci(p, teraz0, 'Zostało')}
+      <p class="hint-avg">${z.znane ? 'Według odhaczeń zostało ' + esc(dawkaTxt(p, Math.max(0, z.zostalo))) + '.' : 'Ilość w tym opakowaniu była nieznana.'}</p>
+      <button type="button" class="save" data-sh-fix>Zapisz stan</button>`, { p: p, opak: id, korekta: true });
+  }
+  function oknoNowegoOpakowania(p) {
+    otworz(p.nazwa + ': nowe opakowanie', `<p class="sh-sub">Otwarte dziś.</p>
+      <label class="field"><span>Ile jest w opakowaniu${p.jednostka ? ' (' + esc(L.jednostka(5, p.jednostka)) + ')' : ''}? Puste = nie wiem</span><input id="shPack" inputmode="decimal" autocomplete="off"></label>
+      <label class="field"><span>Ważne do (jeśli jest termin po otwarciu)</span><input id="shExp" type="date"></label>
+      <label class="field"><span>Przypomnij o zakupie tyle dni przed końcem</span><input id="shAlert" inputmode="numeric" value="7"></label>
+      <p class="err" id="shErr"></p>
+      <button type="button" class="save" data-sh-pack>Dodaj opakowanie</button>`, { p: p });
   }
 
   /* ================= zdarzenia ================= */
@@ -427,6 +523,7 @@ window.CLIENT_VERSION = '1.1';
     app.addEventListener('contextmenu', e => { const b = e.target.closest('[data-take]'); if (b) { e.preventDefault(); oknoPodania(zeSlotu(b.dataset.take)); } });
     app.addEventListener('click', e => {
       let b;
+      for (const h of Z.klik) { if (h(e)) return; }
       if ((b = e.target.closest('[data-take]'))) {
         const s = zeSlotu(b.dataset.take), S = stan();
         if (!s.p) return;
@@ -436,6 +533,11 @@ window.CLIENT_VERSION = '1.1';
         }
         ostatnie = { s: b.dataset.take, t: Date.now() };
         zapisz([nowyWpis(s.p, s.pora, s.data, 'wzięte')], `${s.p.nazwa}: ${slowo(s.p)}`);
+        return;
+      }
+      if ((b = e.target.closest('[data-undo]'))) {
+        if (!uzbrojony(b, 'Cofnąć?')) return;
+        cofnij([b.dataset.undo]);
         return;
       }
       if ((b = e.target.closest('[data-more]'))) { oknoPodania(zeSlotu(b.dataset.more)); return; }
@@ -468,6 +570,8 @@ window.CLIENT_VERSION = '1.1';
       if ((b = e.target.closest('[data-week-more]'))) { const p = ctx.pozMap[b.dataset.weekMore]; if (p) oknoTygodnia(p); return; }
       if ((b = e.target.closest('[data-adhoc]'))) { const p = ctx.pozMap[b.dataset.adhoc]; if (p) oknoDorazne(p); return; }
       if ((b = e.target.closest('[data-finish]'))) { oknoOpakowania(b.dataset.finish); return; }
+      if ((b = e.target.closest('[data-fix]'))) { oknoKorekty(b.dataset.fix); return; }
+      if ((b = e.target.closest('[data-add-pack]'))) { const p = ctx.pozMap[b.dataset.addPack]; if (p) oknoNowegoOpakowania(p); return; }
       if ((b = e.target.closest('[data-drop]'))) { Rdzen.outbox.remove(b.dataset.drop); render(); return; }
       if ((b = e.target.closest('[data-start]'))) {
         const p = ctx.pozMap[b.dataset.start];
@@ -478,6 +582,24 @@ window.CLIENT_VERSION = '1.1';
       if ((b = e.target.closest('[data-rem]'))) {
         const on = b.dataset.rem === '1';
         wyslij('saveReminders', { enabled: on }, b).then(r => { if (r) toast(on ? (r.model.prefs.reminders.error ? 'Włączone, ale kalendarz wymaga zgody. Szczegóły poniżej.' : 'Przypomnienia włączone.') : 'Przypomnienia wyłączone.'); });
+        return;
+      }
+      if ((b = e.target.closest('[data-drugie]'))) {
+        const v = Number(b.dataset.drugie);
+        wyslij('saveReminders', { drugie: v }, b, v ? 'Drugie przypomnienie ustawione.' : 'Bez drugiego przypomnienia.');
+        return;
+      }
+      if ((b = e.target.closest('[data-pory-save]'))) {
+        const pory = ctx.pory.map(p => ({ nazwa: p.nazwa,
+          godzina: (app.querySelector(`[data-pora-g="${CSS.escape(p.nazwa)}"]`) || {}).value || '',
+          weekend: (app.querySelector(`[data-pora-w="${CSS.escape(p.nazwa)}"]`) || {}).value || '' }));
+        document.activeElement && document.activeElement.blur && document.activeElement.blur();
+        wyslij('savePory', { pory: pory }, b, 'Godziny pór zapisane. Przypomnienia się przestawią.', $('poryErr'));
+        return;
+      }
+      if ((b = e.target.closest('[data-skin]'))) {
+        if (window.setSkin) window.setSkin(b.dataset.skin);
+        render();
       }
     });
 
@@ -485,8 +607,9 @@ window.CLIENT_VERSION = '1.1';
       const c = sheetCtx;
       let b;
       if (!c) return;
+      for (const h of Z.klikOkno) { if (h(e, c)) return; }
       if ((b = e.target.closest('[data-q]'))) {
-        const inp = $('shQty'), k = krok(c.p), n = Math.max(0, Math.round((czytajIlosc(c.p) + k * Number(b.dataset.q)) * 100) / 100);
+        const inp = $('shQty'), k = c.p ? krok(c.p) : 1, n = Math.max(0, Math.round((czytajIlosc(c.p || { dawkaN: 0 }) + k * Number(b.dataset.q)) * 100) / 100);
         inp.value = String(n).replace('.', ',');
         return;
       }
@@ -515,17 +638,30 @@ window.CLIENT_VERSION = '1.1';
         zamknij(); zapisz([it], `${c.p.nazwa}: użycie doraźne zapisane`);
         return;
       }
+      if (e.target.closest('[data-sh-fix]')) {
+        const v = String($('shQty').value).trim(), n = Number(v.replace(',', '.'));
+        if (!v || !(n >= 0)) { $('shQty').focus(); return; }
+        zamknij(); zapisz([{ data: dzis(), pora: '', pozycja: c.p.id, status: 'korekta', ilosc: n, godz: teraz() }], `${c.p.nazwa}: stan poprawiony (zostało ${dawkaTxt(c.p, n)})`);
+        return;
+      }
       if ((b = e.target.closest('[data-sh-finish]'))) {
         const il = Number(String($('shPack').value).replace(',', '.')), exp = $('shExp').value;
         const arg = { id: c.opak, data: dzis(), nowe: b.dataset.shFinish === 'nowe' ? { ilosc: il > 0 ? il : null, wazneDo: exp || null } : null };
         const nazwa = c.p.nazwa, nowe = !!arg.nowe;
-        wyslij('finishPackage', arg, b).then(r => { if (r) { zamknij(); toast(esc(nazwa) + (nowe ? ': nowe opakowanie otwarte.' : ': opakowanie zamknięte. Nowe dodasz w arkuszu, w zakładce Opakowania.')); } });
+        wyslij('finishPackage', arg, b, null, $('shErr')).then(r => { if (r) { zamknij(); toast(esc(nazwa) + (nowe ? ': nowe opakowanie otwarte.' : ': opakowanie zamknięte. Nowe dodasz w Terapiach („+ Opakowanie”).')); } });
+        return;
+      }
+      if (e.target.closest('[data-sh-pack]')) {
+        const nazwa = c.p.nazwa;
+        wyslij('addPackage', { pozycja: c.p.id, ilosc: String($('shPack').value).replace(',', '.'), wazneDo: $('shExp').value || null, alertDni: $('shAlert').value }, e.target.closest('[data-sh-pack]'), null, $('shErr'))
+          .then(r => { if (r) { zamknij(); toast(esc(nazwa) + ': opakowanie dodane.'); } });
       }
     });
 
     Rdzen.outbox.onChange(x => {
       const now = Date.now();
       x.sent.forEach(s => recent.push(Object.assign({}, s.item, { sentAt: now })));
+      if (x.sent.length && Z.poWyslaniu) Z.poWyslaniu(x.sent);
       if (x.model) ustawModel(x.model); else render();
       if (x.failed.length) toast('Nie udało się zapisać: ' + esc(x.failed[0].error || 'spróbuj ponownie'));
     });
@@ -534,11 +670,41 @@ window.CLIENT_VERSION = '1.1';
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && D && dzis() !== lastDay && !sheetOn) render(); });
   }
 
+  /** Link z przypomnienia albo skrótu na ikonie: ?pora=rano&d=2026-11-15, ?akcja=dorazne, ?tab=historia. */
+  function zAdresu() {
+    let q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    if (!q.toString()) return;
+    try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* zostaje adres z parametrami */ }
+    const pora = L.klucz(q.get('pora') || ''), d = q.get('d') || dzis(), t = q.get('tab'), akcja = q.get('akcja');
+    if (t && TABS.indexOf(t) >= 0) { idz(t); return; }
+    if (akcja === 'dorazne') { idz('dzis'); oknoWyboruDoraznej(); return; }
+    if (!pora) return;
+    if (d < dzis() && Z.pokazDzien) { Z.pokazDzien(d); idz('historia'); return; }
+    blysk = { pora: pora, do: Date.now() + 1600 };
+    opened['pora-' + pora] = true;
+    idz('dzis');
+    const karta = document.querySelector(`.card.pora[data-pora="${CSS.escape(pora)}"]`);
+    if (karta) karta.scrollIntoView({ block: 'start' });
+  }
+
   window.startApp = model => {
     D = model; ctx = L.przygotuj(D);
+    const pierwszy = !inited;
     if (!inited) init();
     render();
+    if (pierwszy) zAdresu();
     return { apply(m) { D = m; ctx = L.przygotuj(D); przytnijRecent(); render(); } };
   };
-  Rdzen.boot();
+
+  Object.assign(Z, {
+    L: L, esc: esc, $: $, two: two, cap: cap, dni: dni, kiedy: kiedy, dzis: dzis, teraz: teraz, lsGet: lsGet, lsSet: lsSet, brr: brr,
+    model: () => D, ctx: () => ctx, stan: stan, wpisy: wpisy, render: render, idz: idz, tab: () => tab,
+    otworz: otworz, zamknij: zamknij, toast: toast, wyslij: wyslij, uzbrojony: uzbrojony, zapisz: zapisz, cofnij: cofnij, nowyWpis: nowyWpis,
+    oknoPodania: oknoPodania, opisWpisu: opisWpisu, dawkaTxt: dawkaTxt, podpis: podpis, ikona: ikona, kolor: kolor, nazwaPory: nazwaPory,
+    slowo: slowo, slot: slot, zeSlotu: zeSlotu, CHECK: CHECK, opened: opened
+  });
+  // start po wczytaniu wszystkich plików (moduly.js dokłada ekrany Historia i Raport oraz edycję)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => Rdzen.boot());
+  else setTimeout(() => Rdzen.boot(), 0);
 })();

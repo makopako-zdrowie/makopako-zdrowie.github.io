@@ -1,5 +1,5 @@
 /****************************************************************
- * ZDROWIE – skrypt Apps Script (v1.1, 15.11.2026)
+ * ZDROWIE – skrypt Apps Script (v2.0, 15.11.2026)
  *
  * Rdzeń przeniesiony z Finansów v19 (bez zmian w działaniu):
  *  - API dla strony: doPost {token|key, fn, arg} jako text/plain, odpowiedź JSON, bez HtmlService,
@@ -14,6 +14,9 @@
  *  - buildModel_: dane dla strony (plan dnia, tydzień i zapasy liczy wspólna LOGIKA, ta sama co w telefonie),
  *  - logDose / undoDose: odhaczenia w Dzienniku (tylko dopisywanie, cofanie przez kolumnę „Stan”),
  *  - finishPackage, startPosition, saveReminders,
+ *  - v2: getLog (dziennik z dowolnego okresu: historia i raport), korekta zapasu (status „korekta”),
+ *    edycja w aplikacji: savePosition (zmiana dawki/planu = nowa wersja pozycji), endPosition, deletePosition,
+ *    saveTherapy, savePory, addPackage; drugie przypomnienie i link do aplikacji w wydarzeniach,
  *  - przypomnienia w Kalendarzu Google: jedno wydarzenie na porę dnia, wyzwalacz co 15 minut.
  *
  * W TYM PLIKU NIE MA DANYCH ZDROWOTNYCH. Dane startowe są w osobnym pliku DaneStartowe.gs (poza repozytorium).
@@ -24,8 +27,9 @@
  ****************************************************************/
 
 const CORE = {
-  VERSION: '1.1',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
+  VERSION: '2.0',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
   APP_NAME: 'Zdrowie',
+  APP_URL: 'https://makopako-zdrowie.github.io/',   // link w przypomnieniach otwiera aplikację na właściwej porze
   DEVICES_SHEET: 'Urządzenia'
 };
 
@@ -38,7 +42,14 @@ const ACTIONS = {
   undoDose: function (arg) { return undoDose(arg); },
   finishPackage: function (arg) { return finishPackage(arg); },
   startPosition: function (arg) { return startPosition(arg); },
-  saveReminders: function (arg) { return saveReminders(arg); }
+  saveReminders: function (arg) { return saveReminders(arg); },
+  getLog: function (arg) { return getLog(arg); },
+  savePosition: function (arg) { return savePosition(arg); },
+  endPosition: function (arg) { return endPosition(arg); },
+  deletePosition: function (arg) { return deletePosition(arg); },
+  saveTherapy: function (arg) { return saveTherapy(arg); },
+  savePory: function (arg) { return savePory(arg); },
+  addPackage: function (arg) { return addPackage(arg); }
 };
 
 /** Kto wywołał bieżącą operację (do kolumny „Urządzenie” w Dzienniku). */
@@ -368,7 +379,7 @@ function withLock_(fn) {
 /* Poniższy blok to kopia pliku logika.js ze strony. Nie zmieniaj go tutaj: wstawia go narzedzia/zbuduj.js. */
 /* >>> LOGIKA >>> */
 /****************************************************************
- * ZDROWIE – wspólna logika (v1.1)
+ * ZDROWIE – wspólna logika (v2.0)
  *
  * Czyste funkcje bez dostępu do strony i do arkusza: harmonogramy, plan dnia, tydzień, doraźne, zapasy,
  * lista przypomnień. Ten sam tekst jest w stronie (logika.js) i w Code.gs (między znacznikami LOGIKA),
@@ -491,19 +502,27 @@ var Logika = (function () {
       .sort((a, b) => (a.kolejnosc || 0) - (b.kolejnosc || 0));
     const poryMap = {}; pory.forEach(p => { poryMap[p.klucz] = p; });
     const terapie = {}; (model.terapie || []).forEach(t => { terapie[t.id] = t; });
-    const pozycje = (model.pozycje || []).map(p => Object.assign({}, p, {
+    const pozycje = (model.pozycje || []).filter(p => p.status !== 'usunięta').map(p => Object.assign({}, p, {
       h: harmonogram(p.harmonogram),
       poryN: String(p.pory || '').split(/[+,;]/).map(klucz).filter(Boolean),
       dawkaN: p.dawka > 0 ? p.dawka : 1,
       przyp: przypomnienie(p.przypomnienie)
     }));
     const pozMap = {}; pozycje.forEach(p => { pozMap[p.id] = p; });
+    // rodzina = ta pozycja i jej poprzednie wersje (zmiana dawki albo planu tworzy nową wersję, zapas i historia idą dalej)
+    const rodzina = {}, korzen = {};
+    pozycje.forEach(p => {
+      const ids = [p.id];
+      let q = p, n = 0;
+      while (q.poprzednia && pozMap[q.poprzednia] && ids.indexOf(q.poprzednia) < 0 && n++ < 50) { ids.push(q.poprzednia); q = pozMap[q.poprzednia]; }
+      rodzina[p.id] = ids; korzen[p.id] = ids[ids.length - 1];
+    });
     const otwarte = {}, skonczone = {};
     (model.opakowania || []).forEach(o => {
       if (o.skonczone) (skonczone[o.pozycja] = skonczone[o.pozycja] || []).push(o);
       else if (!otwarte[o.pozycja] || String(o.otwarto || '') >= String(otwarte[o.pozycja].otwarto || '')) otwarte[o.pozycja] = o;
     });
-    return { pory: pory, poryMap: poryMap, terapie: terapie, pozycje: pozycje, pozMap: pozMap, otwarte: otwarte, skonczone: skonczone };
+    return { pory: pory, poryMap: poryMap, terapie: terapie, pozycje: pozycje, pozMap: pozMap, otwarte: otwarte, skonczone: skonczone, rodzina: rodzina, korzen: korzen };
   }
   /** Pory pozycji; bez wpisanej pory trafia do „w ciągu dnia”. */
   const poryPozycji = p => (p.poryN.length ? p.poryN : [DOMYSLNA_PORA]);
@@ -515,14 +534,19 @@ var Logika = (function () {
    * Wpisy „doraźnie” nie mają pory i liczą się wszystkie.
    */
   function indeks(wpisy) {
-    const sloty = {}, dorazne = [];
+    const sloty = {}, dorazne = [], korekty = [], wszystkie = [];
     (wpisy || []).forEach(w => {
+      wszystkie.push(w);
       if (w.status === 'doraźnie') dorazne.push(w);
+      else if (w.status === 'korekta') korekty.push(w);
       else sloty[kluczSlotu(w.data, w.pora, w.pozycja)] = w;
     });
     const lista = Object.keys(sloty).map(k => sloty[k]);
-    return { sloty: sloty, dorazne: dorazne, lista: lista };
+    return { sloty: sloty, dorazne: dorazne, korekty: korekty, lista: lista, wszystkie: wszystkie };
   }
+  /** Czy wpis zmniejsza zapas: użycie doraźne albo aktualna odpowiedź „wzięte” dla podania. */
+  const liczySie = (idx, w) => w.status === 'doraźnie' || (w.status === 'wzięte' && idx.sloty[kluczSlotu(w.data, w.pora, w.pozycja)] === w);
+  const iloscWpisu = (w, p) => ((w.ilosc > 0 || w.ilosc === 0) ? +w.ilosc : p.dawkaN);
   const stanWpisu = w => (!w ? 'do' : w.status === 'wzięte' ? 'wziete' : w.status === 'pominięte' ? 'pominiete' : 'niewiem');
 
   /* ---------------- plan dnia ---------------- */
@@ -609,7 +633,8 @@ var Logika = (function () {
   /* ---------------- doraźne ---------------- */
   function dorazne(ctx, idx, dzis) {
     const pon = poczatekTyg(dzis);
-    return ctx.pozycje.filter(p => p.dorazne && p.status === 'aktywna' && (!p.od || p.od <= dzis) && (!p.do || p.do >= dzis)).map(p => {
+    // także wersja zakończona dziś (zmiana dawki od jutra): do końca dnia nadal można użyć doraźnie
+    return ctx.pozycje.filter(p => p.dorazne && (p.status === 'aktywna' || (p.status === 'zakończona' && p.do && p.do >= dzis)) && (!p.od || p.od <= dzis) && (!p.do || p.do >= dzis)).map(p => {
       const moje = idx.dorazne.filter(w => w.pozycja === p.id);
       return { p: p, dzis: moje.filter(w => w.data === dzis), tydzien: moje.filter(w => w.data >= pon && w.data <= dzis).length };
     });
@@ -623,6 +648,22 @@ var Logika = (function () {
     idx.lista.forEach(w => { if (w.status === 'wzięte') dodaj(w); });
     idx.dorazne.forEach(dodaj);
     return s;
+  }
+  /**
+   * Stan opakowania z dziennika, z korektami („licznik pokazuje 92”). ids = pozycja i jej poprzednie wersje.
+   * start = stan sprzed okna dziennika (liczy skrypt): { zuz } albo { kor, zuz } po korekcie.
+   * Wynik: { zuz, kor, korData } – bez korekty zostało = ilość − zuz, po korekcie zostało = kor − zuz.
+   */
+  function stanOpakowania(idx, ids, o, p, start) {
+    let zuz = start && start.zuz || 0, kor = start && (start.kor || start.kor === 0) ? +start.kor : null, korData = start && start.korData || '';
+    // według dat; w obrębie dnia według kolejności zapisu (sortowanie jest stabilne)
+    idx.wszystkie.filter(w => ids.indexOf(w.pozycja) >= 0 && o.otwarto && w.data >= o.otwarto).sort((x, y) => (x.data < y.data ? -1 : x.data > y.data ? 1 : 0)).forEach(w => {
+      if (w.status === 'korekta') { kor = +w.ilosc || 0; korData = w.data; zuz = 0; return; }
+      if (!liczySie(idx, w)) return;
+      if (kor !== null && w.data < korData) return;                 // wpis po fakcie za dzień sprzed korekty: licznik już go uwzględniał
+      zuz += iloscWpisu(w, p);
+    });
+    return { zuz: Math.round(zuz * 1000) / 1000, kor: kor, korData: korData };
   }
   /** Ile zejdzie danego dnia według planu; dziś liczą się tylko podania jeszcze bez odpowiedzi. */
   function potrzeba(p, idx, data, dzis) {
@@ -641,12 +682,14 @@ var Logika = (function () {
     ctx.pozycje.forEach(p => {
       const o = ctx.otwarte[p.id];
       if (!o || p.status === 'zakończona') return;
-      const r = { p: p, opak: o, znane: o.ilosc > 0, razem: o.ilosc > 0 ? o.ilosc : null, zuzyte: null, zostalo: null,
+      const st = stanOpakowania(idx, ctx.rodzina[p.id] || [p.id], o, p, o.przed || (o.zuzytePrzed ? { zuz: o.zuzytePrzed } : null));
+      const r = { p: p, opak: o, znane: o.ilosc > 0 || st.kor !== null, razem: o.ilosc > 0 ? o.ilosc : null, zuzyte: null, zostalo: null,
+        korekta: st.kor !== null ? { ilosc: st.kor, data: st.korData } : null,
         koniecDawek: null, koniec: null, powod: null, dniDoKonca: null, alert: false,
         otwarteDni: o.otwarto ? num(dzis) - num(o.otwarto) : null, poTerminie: !!(o.wazneDo && o.wazneDo < dzis) };
       if (r.znane) {
-        r.zuzyte = (o.zuzytePrzed || 0) + (o.otwarto ? zuzycie(idx, p, o.otwarto) : 0);
-        r.zostalo = Math.round((r.razem - r.zuzyte) * 1000) / 1000;
+        r.zuzyte = st.zuz;
+        r.zostalo = Math.round(((st.kor !== null ? st.kor : r.razem) - st.zuz) * 1000) / 1000;
         let z = r.zostalo, d = dzis, ost = null, bylo = false, i = 0;
         for (; i < 800; i++) {
           const n = potrzeba(p, idx, d, dzis);
@@ -655,7 +698,7 @@ var Logika = (function () {
         }
         if (bylo && i < 800) { r.koniecDawek = ost || plus(dzis, -1); r.koniec = r.koniecDawek; r.powod = 'dawki'; }
       } else if (o.otwarto) {
-        const hist = (ctx.skonczone[p.id] || []).filter(x => x.otwarto && x.skonczone && x.skonczone >= x.otwarto).map(x => num(x.skonczone) - num(x.otwarto));
+        const hist = (ctx.rodzina[p.id] || [p.id]).reduce((a, id) => a.concat(ctx.skonczone[id] || []), []).filter(x => x.otwarto && x.skonczone && x.skonczone >= x.otwarto).map(x => num(x.skonczone) - num(x.otwarto));
         if (hist.length) {
           r.sredniaDni = Math.round(hist.reduce((a, b) => a + b, 0) / hist.length);
           r.koniec = plus(o.otwarto, r.sredniaDni); r.powod = 'prognoza';
@@ -693,12 +736,116 @@ var Logika = (function () {
     return out;
   }
 
+  /* ---------------- historia: stan dnia, seria ---------------- */
+  /** Stan dnia: { plan, wz, pom, brak, dor, st } – st: ok / czesc / pom / brak / dzis / none / fut. filtr(p) zawęża pozycje. */
+  function stanDnia(ctx, idx, data, dzis, filtr) {
+    const r = { plan: 0, wz: 0, pom: 0, brak: 0, dor: 0, tydz: 0 };
+    const ok = p => !filtr || filtr(p);
+    dzien(ctx, idx, data).forEach(k => k.pozycje.forEach(x => {
+      if (!ok(x.p)) return;
+      r.plan++;
+      if (x.stan === 'wziete') r.wz++; else if (x.stan === 'pominiete') r.pom++; else r.brak++;
+    }));
+    idx.lista.forEach(w => { const p = ctx.pozMap[w.pozycja]; if (w.data === data && p && p.h.typ === 'tydz' && ok(p) && w.status === 'wzięte') r.tydz++; });
+    idx.dorazne.forEach(w => { const p = ctx.pozMap[w.pozycja]; if (w.data === data && (!p || ok(p))) r.dor++; });
+    if (data > dzis) r.st = 'fut';
+    else if (!r.plan) r.st = r.tydz || r.dor ? 'inne' : 'none';
+    else if (r.wz === r.plan) r.st = 'ok';
+    else if (data === dzis) r.st = 'dzis';
+    else if (!r.brak) r.st = 'pom';
+    else if (!r.wz && !r.pom) r.st = 'brak';
+    else r.st = 'czesc';
+    return r;
+  }
+  /** Ile dni z rzędu wszystko z planu wzięte (dni bez planu nie przerywają). Dziś liczy się, gdy już komplet. */
+  function seria(ctx, idx, dzis, odKiedy) {
+    let n = 0, d = dzis, pierwszy = true;
+    for (let i = 0; i < 400; i++, d = plus(d, -1)) {
+      if (odKiedy && d < odKiedy) return { dni: n, wiecej: true };
+      const s = stanDnia(ctx, idx, d, dzis);
+      if (pierwszy && d === dzis) { pierwszy = false; if (s.st === 'ok') n++; continue; }
+      if (s.st === 'none' || s.st === 'inne') { if (!ctx.pozycje.some(p => p.od && p.od <= d)) return { dni: n, wiecej: false }; continue; }
+      if (s.st !== 'ok') return { dni: n, wiecej: false };
+      n++;
+    }
+    return { dni: n, wiecej: true };
+  }
+
+  /* ---------------- raport dla lekarza ---------------- */
+  /**
+   * Raport jednej terapii za okres [od, do]. wpisy = dziennik z tego okresu. Dziś liczą się tylko podania z odpowiedzią.
+   * Wynik: { bloki: [{ wersje, plan, wz, pom, brak, pct, pominiete, braki, dni, dor, tydz }], zmiany, notatki, dniOkresu }
+   */
+  function raport(ctx, wpisy, terapia, od, do_, dzis) {
+    const idx = indeks(wpisy), koniec = do_ > dzis ? dzis : do_;
+    const dniOkresu = []; for (let d = od; d <= koniec; d = plus(d, 1)) dniOkresu.push(d);
+    const grupy = {}, kolej = [];
+    ctx.pozycje.filter(p => p.terapia === terapia).forEach(p => {
+      const k = ctx.korzen[p.id];
+      if (!grupy[k]) { grupy[k] = []; kolej.push(k); }
+      grupy[k].push(p);
+    });
+    const zmiany = [], notatki = [];
+    const bloki = kolej.map(k => {
+      const wersje = grupy[k].slice().sort((a, b) => String(a.od || '9').localeCompare(String(b.od || '9')));
+      const ids = wersje.map(p => p.id);
+      const b = { wersje: wersje, plan: 0, wz: 0, pom: 0, brak: 0, pct: null, pominiete: [], braki: [], dni: [], dor: 0, tydz: null };
+      const naDzien = {};
+      wersje.forEach(p => {
+        if (p.status === 'planowana' || !p.od) return;
+        if (p.h.typ === 'tydz') {
+          // N razy w tygodniu: plan na tydzień, w niepełnych tygodniach proporcjonalnie; bieżący tydzień bez braków
+          b.tydz = b.tydz || { plan: 0 };
+          for (let pon = poczatekTyg(od); pon <= koniec; pon = plus(pon, 7)) {
+            const a = [pon, od, p.od].sort().pop(), z = [plus(pon, 6), koniec, p.do || '9999'].sort()[0];
+            if (a > z) continue;
+            let wz = 0, pom = 0;
+            idx.lista.forEach(w => { if (w.pozycja === p.id && w.data >= a && w.data <= z) { if (w.status === 'wzięte') { wz++; naDzien[w.data] = 'ok'; } else if (w.status === 'pominięte') { pom++; if (!naDzien[w.data]) naDzien[w.data] = 'pom'; } } });
+            const dniW = num(z) - num(a) + 1, pelny = plus(pon, 6) <= koniec && plus(pon, 6) < dzis;
+            let pref = 0;
+            for (let x = a; x <= z; x = plus(x, 1)) if (p.h.pref.indexOf(dzienTyg(x)) >= 0) pref++;
+            let plan = dniW === 7 ? p.h.n : p.h.pref.length ? Math.min(p.h.n, pref) : Math.round(p.h.n * dniW / 7);
+            if (!pelny) plan = Math.min(plan, wz + pom);
+            plan = Math.max(plan, wz + pom);
+            b.plan += plan; b.wz += wz; b.pom += pom; b.brak += Math.max(0, plan - wz - pom);
+          }
+          return;
+        }
+        dniOkresu.forEach(d => {
+          if (!wypada(p, d)) return;
+          poryPozycji(p).forEach(pora => {
+            const w = idx.sloty[kluczSlotu(d, pora, p.id)], st = stanWpisu(w);
+            if (d === dzis && st === 'do') return;
+            b.plan++;
+            const stary = naDzien[d];
+            if (st === 'wziete') { b.wz++; naDzien[d] = !stary || stary === 'ok' ? 'ok' : stary === 'brak' ? 'czesc' : stary; }
+            else if (st === 'pominiete') { b.pom++; b.pominiete.push({ data: d, pora: pora, powod: w.powod || '', notatka: w.notatka || '' }); naDzien[d] = stary === 'brak' || stary === 'czesc' ? 'czesc' : 'pom'; }
+            else { b.brak++; b.braki.push({ data: d, pora: pora, niewiem: st === 'niewiem' }); naDzien[d] = !stary ? 'brak' : stary === 'brak' ? 'brak' : 'czesc'; }
+          });
+        });
+      });
+      idx.dorazne.forEach(w => { if (ids.indexOf(w.pozycja) >= 0 && w.data >= od && w.data <= koniec) { b.dor++; if (!naDzien[w.data]) naDzien[w.data] = 'dor'; } });
+      b.dni = dniOkresu.map(d => ({ data: d, st: naDzien[d] || 'none' }));
+      b.pct = b.plan ? Math.round(100 * b.wz / b.plan) : null;
+      b.dorNaTydz = dniOkresu.length ? Math.round(10 * b.dor * 7 / dniOkresu.length) / 10 : 0;
+      wersje.forEach((p, i) => {
+        if (p.od && p.od >= od && p.od <= do_) zmiany.push({ data: p.od, typ: i ? 'zmiana' : 'start', z: i ? wersje[i - 1] : null, na: p });
+        if (p.do && p.do >= od && p.do <= do_ && i === wersje.length - 1) zmiany.push({ data: p.do, typ: 'koniec', na: p });
+      });
+      idx.wszystkie.forEach(w => { if (ids.indexOf(w.pozycja) >= 0 && w.notatka && w.data >= od && w.data <= koniec && w.status !== 'korekta') notatki.push({ data: w.data, p: ctx.pozMap[w.pozycja], tekst: w.notatka, status: w.status }); });
+      return b;
+    }).filter(b => b.plan || b.dor || b.wersje.some(p => p.od && p.od <= koniec && (!p.do || p.do >= od) && p.status !== 'planowana'));
+    zmiany.sort((a, b) => a.data.localeCompare(b.data));
+    notatki.sort((a, b) => a.data.localeCompare(b.data));
+    return { od: od, do: do_, koniec: koniec, dniOkresu: dniOkresu.length, bloki: bloki, zmiany: zmiany, notatki: notatki };
+  }
+
   return { num: num, str: str, plus: plus, dzienTyg: dzienTyg, poczatekTyg: poczatekTyg, poprawnaData: poprawnaData, dataPl: dataPl,
     DNI: DNI, DNI_W: DNI_W, DNI_SKROT: DNI_SKROT, harmonogram: harmonogram, opisHarmonogramu: opisHarmonogramu,
     liczba: liczba, jednostka: jednostka, ilosc: ilosc, klucz: klucz, przypomnienie: przypomnienie, przygotuj: przygotuj, poryPozycji: poryPozycji,
     kluczSlotu: kluczSlotu, indeks: indeks, stanWpisu: stanWpisu, wZakresie: wZakresie, wypada: wypada, godzinaPory: godzinaPory,
     dzien: dzien, zalegle: zalegle, tydzien: tydzien, tygodniowaDzis: tygodniowaDzis, dorazne: dorazne,
-    zuzycie: zuzycie, zapasy: zapasy, przypomnienia: przypomnienia };
+    zuzycie: zuzycie, stanOpakowania: stanOpakowania, zapasy: zapasy, przypomnienia: przypomnienia, stanDnia: stanDnia, seria: seria, raport: raport };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Logika;
 /* <<< LOGIKA <<< */
@@ -708,13 +855,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Logika;
 /** Zakładki aplikacji. Kolumny odnajdujemy po nazwie z wiersza 1, więc można je przestawiać i dopisywać własne. */
 const TABS = {
   TERAPIE: { name: 'Terapie', head: ['ID', 'Nazwa', 'Lekarz', 'Specjalizacja', 'Od', 'Do', 'Kolor', 'Uwagi'], text: ['Od', 'Do'] },
-  POZYCJE: { name: 'Pozycje', head: ['ID', 'Terapia', 'Nazwa', 'Rodzaj', 'Postać', 'Dawka', 'Jednostka', 'Harmonogram', 'Pory', 'Doraźnie', 'Warunki', 'Od', 'Do', 'Status', 'Uwagi', 'Przypomnienie'], text: ['Harmonogram', 'Pory', 'Od', 'Do', 'Przypomnienie'] },
+  POZYCJE: { name: 'Pozycje', head: ['ID', 'Terapia', 'Nazwa', 'Rodzaj', 'Postać', 'Dawka', 'Jednostka', 'Harmonogram', 'Pory', 'Doraźnie', 'Warunki', 'Od', 'Do', 'Status', 'Uwagi', 'Przypomnienie', 'Poprzednia'], text: ['Harmonogram', 'Pory', 'Od', 'Do', 'Przypomnienie'] },
   PORY: { name: 'Pory dnia', head: ['Nazwa', 'Godzina', 'Godzina w weekend', 'Kolejność'], text: ['Godzina', 'Godzina w weekend'] },
   DZIENNIK: { name: 'Dziennik', head: ['ID', 'Zapisano', 'Data', 'Godzina', 'Pora', 'Pozycja', 'Nazwa', 'Status', 'Ilość', 'Powód', 'Później', 'Notatka', 'Urządzenie', 'Stan'], text: ['ID', 'Zapisano', 'Data', 'Godzina'] },
   OPAKOWANIA: { name: 'Opakowania', head: ['ID', 'Pozycja', 'Otwarto', 'Ilość w opakowaniu', 'Ważne do', 'Alert (dni przed)', 'Skończone', 'Uwagi'], text: ['Otwarto', 'Ważne do', 'Skończone'] }
 };
 const OKNO_DNI = 40;                                              // tyle dni dziennika dostaje strona; starsze zużycie zapasu liczy skrypt
-const STATUSY = ['wzięte', 'pominięte', 'doraźnie', 'nie pamiętam'];
+const STATUSY = ['wzięte', 'pominięte', 'doraźnie', 'nie pamiętam', 'korekta'];
 
 function tz_() { return Session.getScriptTimeZone() || 'Europe/Warsaw'; }
 function todayStr_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'); }
@@ -818,7 +965,7 @@ function buildModel_() {
   const pozycje = tP.rows.filter(function (r) { return !isEmpty_(r['ID']); }).map(function (r) {
     const przyp = textCell_(widok[r._row] ? widok[r._row]['Przypomnienie'] : '');
     if (przyp && !Logika.przypomnienie(przyp)) warnings.push('Pozycja „' + textCell_(r['Nazwa']) + '”: nie rozumiem przypomnienia „' + przyp + '”. Wpisz godzinę (np. 22:00), „nie” albo zostaw puste.');
-    return { przypomnienie: Logika.przypomnienie(przyp), id: textCell_(r['ID']), terapia: textCell_(r['Terapia']), nazwa: textCell_(r['Nazwa']), rodzaj: textCell_(r['Rodzaj']).toLowerCase(),
+    return { przypomnienie: Logika.przypomnienie(przyp), poprzednia: textCell_(r['Poprzednia']), id: textCell_(r['ID']), terapia: textCell_(r['Terapia']), nazwa: textCell_(r['Nazwa']), rodzaj: textCell_(r['Rodzaj']).toLowerCase(),
       postac: textCell_(r['Postać']), dawka: numCell_(r['Dawka']), jednostka: textCell_(r['Jednostka']), harmonogram: textCell_(r['Harmonogram']),
       pory: textCell_(r['Pory']), dorazne: boolCell_(r['Doraźnie']), warunki: textCell_(r['Warunki']), od: dateCell_(r['Od']), do: dateCell_(r['Do']),
       status: textCell_(r['Status']).toLowerCase() || 'aktywna', uwagi: textCell_(r['Uwagi']) };
@@ -829,28 +976,18 @@ function buildModel_() {
   });
 
   const okno = [], starsze = [];
-  tD.rows.forEach(function (r) {
-    if (isEmpty_(r['ID']) || /cofni/i.test(String(r['Stan'] || ''))) return;
-    const data = dateCell_(r['Data']);
-    if (!data) return;
-    const w = { id: textCell_(r['ID']), data: data, pozycja: textCell_(r['Pozycja']), status: textCell_(r['Status']).toLowerCase() };
-    const godz = timeCell_(r['Godzina']), pora = textCell_(r['Pora']), il = numCell_(r['Ilość']), powod = textCell_(r['Powód']), notatka = textCell_(r['Notatka']);
-    if (godz) w.godz = godz;
-    if (pora) w.pora = pora;
-    if (il !== null) w.ilosc = il;
-    if (powod) w.powod = powod;
-    if (notatka) w.notatka = notatka;
-    if (boolCell_(r['Później'])) w.pozniej = true;
-    (data >= od ? okno : starsze).push(w);
-  });
+  logRows_(tD).forEach(function (w) { (w.data >= od ? okno : starsze).push(w); });
 
-  // zużycie zapasu sprzed okna: strona dolicza do niego wpisy z okna i te czekające w telefonie
+  // stan zapasu sprzed okna (zużycie i ostatnia korekta): strona dolicza do niego wpisy z okna i te czekające w telefonie
   const ctx = Logika.przygotuj({ terapie: terapie, pozycje: pozycje, pory: pory, opakowania: opakowania });
   const stare = Logika.indeks(starsze);
   opakowania.forEach(function (o) {
     const p = ctx.pozMap[o.pozycja];
     if (!p) { warnings.push('Opakowanie ' + o.id + ' wskazuje pozycję „' + o.pozycja + '”, której nie ma w zakładce Pozycje.'); return; }
-    if (!o.skonczone && o.otwarto && o.ilosc > 0 && o.otwarto < od) o.zuzytePrzed = Logika.zuzycie(stare, p, o.otwarto);
+    if (!o.skonczone && o.otwarto && o.otwarto < od) {
+      const st = Logika.stanOpakowania(stare, ctx.rodzina[p.id] || [p.id], o, p, null);
+      if (st.zuz || st.kor !== null) o.przed = st.kor !== null ? { zuz: st.zuz, kor: st.kor, korData: st.korData } : { zuz: st.zuz };
+    }
   });
 
   ctx.pozycje.forEach(function (p) {
@@ -906,13 +1043,16 @@ function logDose(arg) {
       if (STATUSY.indexOf(status) < 0) throw new Error('Nieznany status wpisu.');
       if (!Logika.poprawnaData(it.data) || it.data < min || it.data > max) throw new Error('Niepoprawna data wpisu.');
       let il = '';
-      if (status === 'wzięte' || status === 'doraźnie') {
+      if (status === 'korekta') {
+        il = Number(it.ilosc);
+        if (!(il >= 0 && il <= 100000) || it.ilosc === null || it.ilosc === '') throw new Error('Podaj, ile zostało w opakowaniu.');
+      } else if (status === 'wzięte' || status === 'doraźnie') {
         const dawka = numCell_(p['Dawka']);
         il = Number(it.ilosc);
         if (!(il >= 0 && il <= 100000) || it.ilosc === null || it.ilosc === undefined || it.ilosc === '') il = dawka > 0 ? dawka : 1;
       }
       rows.push(rowFor_(tD, {
-        'ID': id, 'Zapisano': stamp, 'Data': it.data, 'Godzina': timeCell_(it.godz), 'Pora': status === 'doraźnie' ? '' : cleanText_(it.pora, 30),
+        'ID': id, 'Zapisano': stamp, 'Data': it.data, 'Godzina': timeCell_(it.godz), 'Pora': status === 'doraźnie' || status === 'korekta' ? '' : cleanText_(it.pora, 30),
         'Pozycja': textCell_(p['ID']), 'Nazwa': cleanText_(p['Nazwa'], 60), 'Status': status, 'Ilość': il,
         'Powód': status === 'pominięte' ? cleanText_(it.powod, 60) : '', 'Później': it.pozniej ? 'TAK' : '',
         'Notatka': cleanText_(it.notatka, 200), 'Urządzenie': dev, 'Stan': ''
@@ -999,7 +1139,7 @@ const PORA_EMOJI = { 'rano': '🌅', 'w ciągu dnia': '☀️', 'południe': '�
 
 function remindersPrefs_() {
   const r = readPrefs_('REMINDERS', {});
-  return { enabled: !!r.enabled, lastSync: r.lastSync || null, error: r.error || null, count: r.count || 0 };
+  return { enabled: !!r.enabled, drugie: isFinite(r.drugie) ? +r.drugie : 60, lastSync: r.lastSync || null, error: r.error || null, count: r.count || 0 };
 }
 function remindersInfo_() { const r = remindersPrefs_(); r.calendar = CAL_NAME; return r; }
 function storeReminders_(r) { PropertiesService.getScriptProperties().setProperty('REMINDERS', JSON.stringify(r)); }
@@ -1011,10 +1151,11 @@ function authHint_(e) {
     : m;
 }
 
-/** Włącznik z Ustawień aplikacji: arg = { enabled }. */
+/** Włącznik z Ustawień aplikacji: arg = { enabled, drugie } (drugie = minuty do ponownego przypomnienia, 0 = bez). */
 function saveReminders(arg) {
   const r = remindersPrefs_();
-  r.enabled = !!(arg && arg.enabled);
+  if (arg && arg.enabled !== undefined) r.enabled = !!arg.enabled;
+  if (arg && [0, 30, 60, 90, 120, 180].indexOf(Number(arg.drugie)) >= 0) r.drugie = Number(arg.drugie);
   r.error = null;
   storeReminders_(r);
   try {
@@ -1073,10 +1214,14 @@ function remindersWanted_(today) {
   const model = JSON.parse(cachedModelJson_(false));
   const ctx = Logika.przygotuj(model), idx = Logika.indeks(model.dziennik.wpisy);
   const at = function (iso, hm) { const p = String(iso).split('-').map(Number), t = String(hm || '09:00').split(':').map(Number); return new Date(p[0], p[1] - 1, p[2], t[0] || 0, t[1] || 0, 0); };
+  const drugie = remindersPrefs_().drugie;
   Logika.przypomnienia(ctx, idx, today, 7).forEach(function (x) {
-    const nazwa = x.nazwa.charAt(0).toUpperCase() + x.nazwa.slice(1);
-    want['pora:' + x.data + ':' + x.klucz + ':' + x.godzina] = { title: (PORA_EMOJI[x.klucz] || '⏰') + ' ' + nazwa + ': ' + x.nazwy.join(', '), start: at(x.data, x.godzina),
-      desc: 'Odhacz w aplikacji Zdrowie. Gdy wszystko z tej pory jest odhaczone, wydarzenie znika.' };
+    const nazwa = x.nazwa.charAt(0).toUpperCase() + x.nazwa.slice(1), co = nazwa + ': ' + x.nazwy.join(', ');
+    const link = CORE.APP_URL + '?pora=' + encodeURIComponent(x.klucz) + '&d=' + x.data;
+    const desc = 'Odhacz: ' + link + '\nGdy wszystko z tej pory jest odhaczone, wydarzenie znika.';
+    const start = at(x.data, x.godzina);
+    want['pora:' + x.data + ':' + x.klucz + ':' + x.godzina] = { title: (PORA_EMOJI[x.klucz] || '⏰') + ' ' + co, start: start, desc: desc };
+    if (drugie > 0) want['pora2:' + x.data + ':' + x.klucz + ':' + x.godzina] = { title: '⏰ Nadal: ' + co, start: new Date(start.getTime() + drugie * 60000), desc: desc };
   });
   Logika.zapasy(ctx, idx, today).forEach(function (z) {
     if (!z.koniec) return;
@@ -1226,4 +1371,210 @@ function seedSheet_(ss, dane, log) {
     });
   });
   fill(TABS.DZIENNIK, wpisy);
+}
+
+/* ============================ v2: DZIENNIK Z OKRESU, EDYCJA W APLIKACJI ============================ */
+
+/** Wiersze Dziennika (bez cofniętych) jako wpisy dla strony, w kolejności zapisu. */
+function logRows_(tD) {
+  const out = [];
+  tD.rows.forEach(function (r) {
+    if (isEmpty_(r['ID']) || /cofni/i.test(String(r['Stan'] || ''))) return;
+    const data = dateCell_(r['Data']);
+    if (!data) return;
+    const w = { id: textCell_(r['ID']), data: data, pozycja: textCell_(r['Pozycja']), status: textCell_(r['Status']).toLowerCase() };
+    const godz = timeCell_(r['Godzina']), pora = textCell_(r['Pora']), il = numCell_(r['Ilość']), powod = textCell_(r['Powód']), notatka = textCell_(r['Notatka']);
+    if (godz) w.godz = godz;
+    if (pora) w.pora = pora;
+    if (il !== null) w.ilosc = il;
+    if (powod) w.powod = powod;
+    if (notatka) w.notatka = notatka;
+    if (boolCell_(r['Później'])) w.pozniej = true;
+    out.push(w);
+  });
+  return out;
+}
+
+/** Dziennik z okresu (historia starsza niż okno modelu, raport): arg = { od, do }, najwyżej 400 dni. */
+function getLog(arg) {
+  const od = arg && arg.od, do_ = arg && arg.do;
+  if (!Logika.poprawnaData(od) || !Logika.poprawnaData(do_) || od > do_) throw new Error('Niepoprawny okres.');
+  if (Logika.num(do_) - Logika.num(od) > 400) throw new Error('Najwyżej 400 dni naraz.');
+  const tD = readTable_(SpreadsheetApp.getActiveSpreadsheet(), TABS.DZIENNIK);
+  return JSON.stringify({ ok: true, od: od, do: do_, wpisy: tD.sh ? logRows_(tD).filter(function (w) { return w.data >= od && w.data <= do_; }) : [] });
+}
+
+/** Zmiana komórek wiersza po nazwach kolumn. */
+function setFields_(t, row, obj) {
+  Object.keys(obj).forEach(function (k) { t.sh.getRange(row, colIdx_(t, k)).setValue(asText_(obj[k])); });
+}
+function needTab_(t) { if (!t.sh) throw new Error('W arkuszu brakuje zakładki „' + t.tab.name + '”. Uruchom funkcję utworzArkusz.'); return t; }
+function findRow_(t, id) {
+  const r = t.rows.filter(function (x) { return textCell_(x['ID']) === String(id); })[0];
+  if (!r) throw new Error('Nie znalazłem „' + cleanText_(id, 20) + '” w zakładce ' + t.tab.name + '.');
+  return r;
+}
+
+const POZ_POLA = { terapia: 'Terapia', nazwa: 'Nazwa', rodzaj: 'Rodzaj', postac: 'Postać', dawka: 'Dawka', jednostka: 'Jednostka', harmonogram: 'Harmonogram',
+  pory: 'Pory', dorazne: 'Doraźnie', warunki: 'Warunki', przypomnienie: 'Przypomnienie', uwagi: 'Uwagi' };
+const POZ_PLAN = ['dawka', 'jednostka', 'harmonogram', 'pory'];         // zmiana tych pól w trakcie brania = nowa wersja pozycji
+
+/** Sprawdza i porządkuje pola pozycji z formularza. Zwraca { kolumna: wartość } tylko dla podanych pól. */
+function positionFields_(ss, f) {
+  const out = {};
+  const tT = readTable_(ss, TABS.TERAPIE), tR = readTable_(ss, TABS.PORY, true);
+  if (f.terapia !== undefined) {
+    if (!tT.rows.some(function (r) { return textCell_(r['ID']) === String(f.terapia); })) throw new Error('Wybierz terapię.');
+    out['Terapia'] = String(f.terapia);
+  }
+  if (f.nazwa !== undefined) { const n = cleanText_(f.nazwa, 60); if (!n) throw new Error('Podaj nazwę.'); out['Nazwa'] = n; }
+  ['rodzaj', 'postac', 'jednostka', 'warunki', 'uwagi'].forEach(function (k) { if (f[k] !== undefined) out[POZ_POLA[k]] = cleanText_(f[k], k === 'uwagi' || k === 'warunki' ? 200 : 40); });
+  if (f.dawka !== undefined) {
+    const d = f.dawka === '' || f.dawka === null ? '' : Number(String(f.dawka).replace(',', '.'));
+    if (d !== '' && !(d > 0 && d <= 100000)) throw new Error('Dawka musi być liczbą większą od zera.');
+    out['Dawka'] = d;
+  }
+  if (f.harmonogram !== undefined) {
+    const h = cleanText_(f.harmonogram, 40);
+    if (Logika.harmonogram(h).typ === 'blad') throw new Error('Nie rozumiem harmonogramu „' + h + '”.');
+    out['Harmonogram'] = h;
+  }
+  if (f.pory !== undefined) {
+    const znane = tR.rows.map(function (r) { return Logika.klucz(r['Nazwa']); });
+    const lista = String(f.pory || '').split(/[+,;]/).map(Logika.klucz).filter(Boolean);
+    lista.forEach(function (k) { if (znane.indexOf(k) < 0) throw new Error('Nie ma pory „' + k + '”.'); });
+    out['Pory'] = lista.join('+');
+  }
+  if (f.dorazne !== undefined) out['Doraźnie'] = f.dorazne ? 'TAK' : '';
+  if (f.przypomnienie !== undefined) {
+    const t = String(f.przypomnienie || '').trim(), v = Logika.przypomnienie(t);
+    if (t && !v) throw new Error('Przypomnienie: wpisz godzinę (np. 22:00) albo „nie”.');
+    out['Przypomnienie'] = v;
+  }
+  return out;
+}
+
+/**
+ * Nowa albo zmieniona pozycja: arg = { id?, pola: {…}, od?, start?: 'dzis'|'planowana', opak?: { ilosc, wazneDo, alertDni } }.
+ * Zmiana dawki, jednostki, harmonogramu albo pór pozycji, którą już bierzesz, nie nadpisuje historii:
+ * stara wersja dostaje „Do” (dzień przed „od”) i status „zakończona”, nowa wersja („Poprzednia” = stara) zaczyna się od „od”,
+ * a otwarte opakowanie przechodzi na nową wersję.
+ */
+function savePosition(arg) {
+  const res = withLock_(function (ss) {
+    arg = arg || {};
+    const tP = needTab_(readTable_(ss, TABS.POZYCJE)), today = todayStr_();
+    const pola = positionFields_(ss, arg.pola || {});
+    if (!arg.id) {
+      if (!pola['Nazwa'] || !pola['Terapia']) throw new Error('Podaj nazwę i terapię.');
+      const id = nextId_(tP.rows, 'P'), aktywna = arg.start === 'dzis';
+      const h = Logika.harmonogram(pola['Harmonogram'] || '');
+      if (aktywna && h.typ === 'brak' && pola['Doraźnie'] !== 'TAK') throw new Error('Ustaw harmonogram albo zaznacz „doraźnie”.');
+      appendRows_(tP.sh, [rowFor_(tP, Object.assign({ 'ID': id, 'Od': aktywna ? today : '', 'Do': '', 'Status': aktywna ? 'aktywna' : 'planowana', 'Poprzednia': '' }, pola))]);
+      if (aktywna && arg.opak && (Number(arg.opak.ilosc) > 0 || Logika.poprawnaData(arg.opak.wazneDo))) packageRow_(ss, id, today, arg.opak);
+      return { id: id };
+    }
+    const r = findRow_(tP, arg.id), status = textCell_(r['Status']).toLowerCase(), odStare = dateCell_(r['Od']);
+    const zmianaPlanu = POZ_PLAN.some(function (k) {
+      const kol = POZ_POLA[k];
+      if (pola[kol] === undefined) return false;
+      const stare = k === 'dawka' ? numCell_(r[kol]) : k === 'pory' ? String(r[kol] || '').split(/[+,;]/).map(Logika.klucz).filter(Boolean).join('+') : textCell_(r[kol]);
+      return String(stare === null ? '' : stare) !== String(pola[kol]);
+    });
+    let od = Logika.poprawnaData(arg.od) ? arg.od : today;
+    if (od < today) od = today;
+    if (zmianaPlanu && status === 'aktywna' && odStare && odStare < od) {
+      const id = nextId_(tP.rows, 'P'), kopia = {};
+      tP.tab.head.forEach(function (h) { kopia[h] = h === 'Od' || h === 'Do' ? dateCell_(r[h]) : isDate_(r[h]) ? textCell_(r[h]) : r[h]; });
+      kopia['Przypomnienie'] = Logika.przypomnienie(textCell_(r['Przypomnienie']));
+      appendRows_(tP.sh, [rowFor_(tP, Object.assign(kopia, pola, { 'ID': id, 'Od': od, 'Do': '', 'Status': 'aktywna', 'Poprzednia': textCell_(r['ID']) }))]);
+      setFields_(tP, r._row, { 'Do': Logika.plus(od, -1), 'Status': 'zakończona' });
+      const tO = readTable_(ss, TABS.OPAKOWANIA);
+      if (tO.sh) tO.rows.forEach(function (o) { if (textCell_(o['Pozycja']) === textCell_(r['ID']) && !dateCell_(o['Skończone'])) setFields_(tO, o._row, { 'Pozycja': id }); });
+      return { id: id, nowaWersja: true };
+    }
+    setFields_(tP, r._row, pola);
+    return { id: textCell_(r['ID']) };
+  });
+  afterWrite_();
+  return res;
+}
+
+/** „Kończę branie”: arg = { id, do } (ostatni dzień, domyślnie dziś). */
+function endPosition(arg) {
+  const res = withLock_(function (ss) {
+    const tP = needTab_(readTable_(ss, TABS.POZYCJE)), r = findRow_(tP, arg && arg.id), today = todayStr_();
+    let do_ = Logika.poprawnaData(arg.do) ? arg.do : today;
+    const od = dateCell_(r['Od']);
+    if (od && do_ < od) do_ = od;
+    if (do_ > today) do_ = today;
+    setFields_(tP, r._row, { 'Do': do_, 'Status': 'zakończona' });
+    return { id: textCell_(r['ID']) };
+  });
+  afterWrite_();
+  return res;
+}
+
+/** Usunięcie pozycji planowanej (jeszcze nie brana): status „usunięta”, wiersz zostaje w arkuszu. */
+function deletePosition(arg) {
+  return withLock_(function (ss) {
+    const tP = needTab_(readTable_(ss, TABS.POZYCJE)), r = findRow_(tP, arg && arg.id);
+    if (textCell_(r['Status']).toLowerCase() !== 'planowana') throw new Error('Usunąć można tylko pozycję planowaną. Branie zakończ przyciskiem „Kończę”.');
+    setFields_(tP, r._row, { 'Status': 'usunięta' });
+    return {};
+  });
+}
+
+/** Nowa albo zmieniona terapia: arg = { id?, nazwa, lekarz, specjalizacja, kolor, uwagi }. */
+function saveTherapy(arg) {
+  return withLock_(function (ss) {
+    arg = arg || {};
+    const tT = needTab_(readTable_(ss, TABS.TERAPIE));
+    const nazwa = cleanText_(arg.nazwa, 60);
+    if (!nazwa) throw new Error('Podaj nazwę terapii.');
+    const kolor = /^#[0-9a-f]{6}$/i.test(String(arg.kolor || '')) ? String(arg.kolor) : '';
+    const pola = { 'Nazwa': nazwa, 'Lekarz': cleanText_(arg.lekarz, 60), 'Specjalizacja': cleanText_(arg.specjalizacja, 40), 'Kolor': kolor, 'Uwagi': cleanText_(arg.uwagi, 200) };
+    if (arg.id) { const r = findRow_(tT, arg.id); setFields_(tT, r._row, pola); return { id: textCell_(r['ID']) }; }
+    const id = nextId_(tT.rows, 'T');
+    appendRows_(tT.sh, [rowFor_(tT, Object.assign({ 'ID': id, 'Od': todayStr_(), 'Do': '' }, pola))]);
+    return { id: id };
+  });
+}
+
+/** Godziny pór dnia: arg = { pory: [{ nazwa, godzina, weekend }] } – zmienia istniejące pory. */
+function savePory(arg) {
+  const res = withLock_(function (ss) {
+    const tR = needTab_(readTable_(ss, TABS.PORY, true));
+    (arg && arg.pory || []).forEach(function (x) {
+      const r = tR.rows.filter(function (y) { return Logika.klucz(y['Nazwa']) === Logika.klucz(x.nazwa); })[0];
+      if (!r) throw new Error('Nie ma pory „' + cleanText_(x.nazwa, 30) + '”.');
+      const g = timeCell_(x.godzina), w = timeCell_(x.weekend);
+      if (x.godzina && !g) throw new Error('Niepoprawna godzina: ' + cleanText_(x.godzina, 10));
+      setFields_(tR, r._row, { 'Godzina': g, 'Godzina w weekend': w });
+    });
+    return {};
+  });
+  afterWrite_();
+  return res;
+}
+
+function packageRow_(ss, pozycja, otwarto, o) {
+  const tO = needTab_(readTable_(ss, TABS.OPAKOWANIA));
+  if (tO.rows.some(function (x) { return textCell_(x['Pozycja']) === pozycja && !dateCell_(x['Skończone']); })) throw new Error('Ta pozycja ma już otwarte opakowanie. Najpierw je zamknij („Skończyło się”).');
+  const il = Number(String(o.ilosc === null || o.ilosc === undefined ? '' : o.ilosc).replace(',', '.')), al = Number(o.alertDni);
+  const id = nextId_(tO.rows, 'O');
+  appendRows_(tO.sh, [rowFor_(tO, { 'ID': id, 'Pozycja': pozycja, 'Otwarto': otwarto, 'Ilość w opakowaniu': il > 0 && il <= 100000 ? il : '',
+    'Ważne do': Logika.poprawnaData(o.wazneDo) ? o.wazneDo : '', 'Alert (dni przed)': al >= 0 && al <= 120 ? al : 7, 'Skończone': '', 'Uwagi': '' })]);
+  return id;
+}
+
+/** Nowe opakowanie: arg = { pozycja, ilosc, wazneDo, alertDni, otwarto }. */
+function addPackage(arg) {
+  const res = withLock_(function (ss) {
+    const tP = needTab_(readTable_(ss, TABS.POZYCJE)), p = findRow_(tP, arg && arg.pozycja), today = todayStr_();
+    const otwarto = Logika.poprawnaData(arg.otwarto) && arg.otwarto <= today ? arg.otwarto : today;
+    return { id: packageRow_(ss, textCell_(p['ID']), otwarto, arg) };
+  });
+  afterWrite_();
+  return res;
 }

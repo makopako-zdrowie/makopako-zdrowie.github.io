@@ -194,3 +194,97 @@ test('przypomnienie pozycji: własna godzina, „nie”, grupowanie po godzinie'
   // szampon nadal jest na liście dnia, tylko bez przypomnienia
   assert.ok(L.dzien(ctx, L.indeks([]), DZIS)[0].pozycje.some(x => x.p.id === 'S'));
 });
+
+test('korekta zapasu: licznik nadpisuje stan, liczą się tylko późniejsze użycia; wpis po fakcie sprzed korekty nie', () => {
+  const p = poz({ od: d(-10), pory: 'rano' });
+  const o = { id: 'O', pozycja: 'P1', otwarto: d(-10), ilosc: 100, alertDni: 7 };
+  const wpisy = [wz(d(-3), 'rano', 'P1'), wz(d(-2), 'rano', 'P1'),
+    { id: 'k', data: d(-1), pozycja: 'P1', status: 'korekta', ilosc: 80, godz: '12:00' },
+    wz(d(-1), 'rano', 'P1'),                                                   // po korekcie, ten sam dzień: liczy się
+    wz(d(-4), 'rano', 'P1'),                                                   // „Wziąłeś?” za dzień sprzed korekty, zapisane później: nie liczy się
+    { id: 'u', data: DZIS, pozycja: 'P1', status: 'doraźnie', ilosc: 2 }];
+  const z = L.zapasy(L.przygotuj(model([p], [o])), L.indeks(wpisy), DZIS)[0];
+  assert.equal(z.zostalo, 77); assert.deepEqual(z.korekta, { ilosc: 80, data: d(-1) });
+  // nieznana ilość + korekta = znany stan bez paska
+  const z2 = L.zapasy(L.przygotuj(model([p], [Object.assign({}, o, { ilosc: null })])), L.indeks(wpisy), DZIS)[0];
+  assert.ok(z2.znane); assert.equal(z2.razem, null); assert.equal(z2.zostalo, 77); assert.equal(z2.koniec, d(76));
+  // stan sprzed okna z korektą (liczony przez skrypt)
+  const z3 = L.zapasy(L.przygotuj(model([p], [Object.assign({}, o, { przed: { kor: 50, zuz: 5, korData: d(-60) } })])), L.indeks([wz(d(-1), 'rano', 'P1')]), DZIS)[0];
+  assert.equal(z3.zostalo, 44);
+});
+
+test('wersje pozycji: zmiana dawki zachowuje zapas, historię opakowań i odpowiedzi', () => {
+  const stara = poz({ id: 'A', od: d(-10), do: d(-1), status: 'zakończona', pory: 'rano', dawka: 1 });
+  const nowa = poz({ id: 'B', od: DZIS, poprzednia: 'A', pory: 'rano', dawka: 2 });
+  const ctx = L.przygotuj(model([stara, nowa], [{ id: 'O', pozycja: 'B', otwarto: d(-10), ilosc: 100 }, { id: 'O0', pozycja: 'A', otwarto: d(-40), skonczone: d(-11), ilosc: null }]));
+  assert.deepEqual(ctx.rodzina.B, ['B', 'A']); assert.equal(ctx.korzen.B, 'A');
+  const wpisy = []; for (let k = -10; k <= -1; k++) wpisy.push(wz(d(k), 'rano', 'A'));
+  const z = L.zapasy(ctx, L.indeks(wpisy), DZIS)[0];
+  assert.equal(z.p.id, 'B'); assert.equal(z.zostalo, 90); assert.equal(z.koniec, d(44));      // 90 / 2 dziennie = 45 dni
+  assert.equal(L.dzien(ctx, L.indeks(wpisy), DZIS)[0].pozycje.length, 1);
+  assert.ok(!L.przygotuj(model([poz({ status: 'usunięta' })])).pozycje.length);
+});
+
+test('stan dnia i seria', () => {
+  const ctx = L.przygotuj(model([poz({ od: d(-6) })]));
+  const pelny = k => [wz(d(k), 'rano', 'P1'), wz(d(k), 'wieczór', 'P1')];
+  let wpisy = [].concat(pelny(-1), pelny(-2), pelny(-3), [wz(d(-4), 'rano', 'P1')], pelny(-5));
+  let idx = L.indeks(wpisy);
+  assert.equal(L.stanDnia(ctx, idx, d(-1), DZIS).st, 'ok');
+  assert.equal(L.stanDnia(ctx, idx, d(-4), DZIS).st, 'czesc');
+  assert.equal(L.stanDnia(ctx, idx, d(-6), DZIS).st, 'brak');
+  assert.equal(L.stanDnia(ctx, idx, DZIS, DZIS).st, 'dzis');
+  assert.equal(L.stanDnia(ctx, idx, d(1), DZIS).st, 'fut');
+  assert.equal(L.stanDnia(ctx, idx, d(-7), DZIS).st, 'none');
+  assert.deepEqual(L.seria(ctx, idx, DZIS), { dni: 3, wiecej: false });
+  idx = L.indeks(wpisy.concat(pelny(0)));
+  assert.equal(L.seria(ctx, idx, DZIS).dni, 4);
+  wpisy = [].concat(pelny(-1), [{ id: 'p', data: d(-2), pora: 'rano', pozycja: 'P1', status: 'pominięte' }, wz(d(-2), 'wieczór', 'P1')]);
+  assert.equal(L.stanDnia(ctx, L.indeks(wpisy), d(-2), DZIS).st, 'pom');
+  assert.equal(L.seria(ctx, L.indeks(wpisy), DZIS).dni, 1);
+  assert.deepEqual(L.seria(ctx, L.indeks(pelny(-1)), DZIS, d(-1)), { dni: 1, wiecej: true });
+});
+
+test('raport: regularność, pominięcia z powodem, brak danych, doraźne, tydzień, zmiany i notatki', () => {
+  const pozycje = [
+    poz({ id: 'A', nazwa: 'Stary', od: d(-30), do: d(-11), status: 'zakończona', pory: 'rano' }),
+    poz({ id: 'B', nazwa: 'Nowy', od: d(-10), pory: 'rano+wieczór', dorazne: true }),
+    poz({ id: 'C', nazwa: 'Nowy', od: d(-3), poprzednia: 'B', dawka: 2, pory: 'rano+wieczór', dorazne: true }),
+    poz({ id: 'W', nazwa: 'Raz w tygodniu', harmonogram: '1x/tydz nd', pory: 'w ciągu dnia', od: d(-30) }),
+    poz({ id: 'X', terapia: 'T2', nazwa: 'Inna terapia', od: d(-30) })
+  ];
+  pozycje[0].do = d(-11); pozycje[1].do = d(-4); pozycje[1].status = 'zakończona';
+  const ctx = L.przygotuj(model(pozycje));
+  const wpisy = [];
+  for (let k = -14; k <= -11; k++) wpisy.push(wz(d(k), 'rano', 'A'));
+  for (let k = -10; k <= -4; k++) { wpisy.push(wz(d(k), 'rano', 'B')); if (k !== -6) wpisy.push(wz(d(k), 'wieczór', 'B')); }
+  wpisy.push({ id: 's', data: d(-6), pora: 'wieczór', pozycja: 'B', status: 'pominięte', powod: 'brak leku', notatka: 'apteka zamknięta' });
+  for (let k = -3; k <= -1; k++) { wpisy.push(wz(d(k), 'rano', 'C')); wpisy.push(wz(d(k), 'wieczór', 'C')); }
+  wpisy.push({ id: 'n', data: d(-2), pora: 'rano', pozycja: 'C', status: 'nie pamiętam' });  // nadpisuje wcześniejsze „wzięte”
+  wpisy.push(wz(DZIS, 'rano', 'C'));                                                         // dziś: tylko rano odpowiedziane
+  ['d1', 'd2', 'd3'].forEach((id, i) => wpisy.push({ id: id, data: d(-1 - i), pozycja: 'B', status: 'doraźnie', ilosc: 1 }));
+  wpisy.push(wz(d(-7), 'w ciągu dnia', 'W'));                                               // poprzednia niedziela: zrobione
+  const r = L.raport(ctx, wpisy, 'T1', d(-14), DZIS, DZIS);
+  assert.equal(r.dniOkresu, 15);
+  assert.deepEqual(r.bloki.map(b => b.wersje.map(p => p.id).join('+')), ['A', 'B+C', 'W']);
+  const a = r.bloki[0], b = r.bloki[1], w = r.bloki[2];
+  assert.deepEqual([a.plan, a.wz, a.pct], [4, 4, 100]);
+  assert.deepEqual([b.plan, b.wz, b.pom, b.brak], [14 + 6 + 1, 13 + 5 + 1, 1, 1]);
+  assert.equal(b.pct, 90);
+  assert.deepEqual(b.pominiete, [{ data: d(-6), pora: 'wieczór', powod: 'brak leku', notatka: 'apteka zamknięta' }]);
+  assert.deepEqual(b.braki, [{ data: d(-2), pora: 'rano', niewiem: true }]);
+  assert.equal(b.dor, 3); assert.equal(b.dorNaTydz, 1.4);
+  assert.equal(b.dni.find(x => x.data === d(-6)).st, 'pom'); assert.equal(b.dni.find(x => x.data === d(-2)).st, 'czesc');
+  assert.equal(b.dni.find(x => x.data === d(-5)).st, 'ok'); assert.equal(b.dni.find(x => x.data === d(-12)).st, 'none');
+  // tydzień: 2 pełne tygodnie w okresie (d-13…d-7 i jego część) – niedziela d-7 zrobiona, niedziela d-14 brak, bieżący tydzień bez braków
+  assert.deepEqual([w.plan, w.wz, w.brak], [2, 1, 1]);                        // niedziela d-14: brak, niedziela d-7: zrobione, bieżący tydzień jeszcze trwa
+  assert.deepEqual(r.zmiany.map(z => z.typ + ' ' + z.data + ' ' + z.na.id), ['koniec ' + d(-11) + ' A', 'start ' + d(-10) + ' B', 'zmiana ' + d(-3) + ' C']);
+  assert.deepEqual(r.notatki.map(n => n.tekst), ['apteka zamknięta']);
+  assert.ok(!r.bloki.some(x => x.wersje.some(p => p.id === 'X')));
+});
+
+test('doraźne: w dniu zmiany dawki (nowa wersja od jutra) przycisk zostaje', () => {
+  const ctx = L.przygotuj(model([poz({ id: 'A', dorazne: true, od: d(-10), do: DZIS, status: 'zakończona' }), poz({ id: 'B', dorazne: true, od: d(1), poprzednia: 'A' })]));
+  assert.deepEqual(L.dorazne(ctx, L.indeks([]), DZIS).map(x => x.p.id), ['A']);
+  assert.deepEqual(L.dorazne(ctx, L.indeks([]), d(1)).map(x => x.p.id), ['B']);
+});

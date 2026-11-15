@@ -14,13 +14,16 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="styles.css">
+<script src="skin.js"></script>
 </head>
 <body class="booting">
 <header class="appbar"><div class="ab-in">
   <div class="ab-title"><b>Zdrowie</b><span id="abSub">wczytuję dane…</span></div>
   <nav class="tabbar" id="tabbar" aria-label="Sekcje">
     <button type="button" data-tab="dzis"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="8.5"/><path d="m8.2 12.3 2.6 2.6 5-5.4"/></svg><span>Dziś</span></button>
+    <button type="button" data-tab="historia"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M9 3.5v4M15 3.5v4M8 14h2M12 14h2M8 17h2"/></svg><span>Historia</span></button>
     <button type="button" data-tab="terapie"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="8.5" width="17" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="m9.5 9.5 5 5"/></svg><span>Terapie</span></button>
+    <button type="button" data-tab="raport"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"/><path d="M14 3.5V8h4M9 13h6M9 16.5h4"/></svg><span>Raport</span></button>
   </nav>
   <div class="ab-act">
     <button type="button" class="ib" data-refresh aria-label="Odśwież dane"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2"/></svg></button>
@@ -43,5 +46,6 @@
 <script src="rdzen.js"></script>
 <script src="logika.js"></script>
 <script src="app.js"></script>
+<script src="moduly.js"></script>
 </body>
 </html>

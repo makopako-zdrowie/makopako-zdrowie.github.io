@@ -237,11 +237,160 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(page.url() === base, '„wstecz” zamyka okno i zostaje w aplikacji');
     // różnica wersji strony i skryptu
     await page.route('https://script.google.com/**', async route => {
-      const o = JSON.parse(s.env.api.doPost({ postData: { contents: route.request().postData() } }).getContent()); o.version = '2.0';
+      const o = JSON.parse(s.env.api.doPost({ postData: { contents: route.request().postData() } }).getContent()); o.version = '9.0';
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     });
     await page.click('[data-refresh]'); await page.waitForSelector('#sync .mm');
-    ok((await page.textContent('#sync')).includes('skrypt w Apps Script v2.0'), 'ostrzeżenie o różnicy wersji');
+    ok((await page.textContent('#sync')).includes('skrypt w Apps Script v9.0'), 'ostrzeżenie o różnicy wersji');
+    await s.ctx.close();
+  }
+
+  /* ---------- v2: cofanie ↶, Historia, Raport, edycja, korekta, ustawienia, linki ---------- */
+  {
+    const s = await sesja(390, 844, true), page = s.page;
+    const czysto = () => page.waitForFunction(() => JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing'));
+    await polacz(s);
+    ok(await page.isVisible('.week7'), 'pasek 7 dni na ekranie Dziś');
+    ok((await page.locator('.week7 .d7').count()) === 7, '7 kratek');
+    ok((await page.locator('.item .ic svg').count()) > 0, 'ikonki pozycji');
+    // ↶ przy odhaczonej pozycji: dwa dotknięcia cofają
+    await page.click('.pora .item:first-child .it-main');
+    await page.waitForSelector('.pora .item:first-child .it-more.undo');
+    ok(await page.isVisible('.pora .item:first-child.just'), 'animacja świeżego odhaczenia');
+    await czysto();
+    await page.click('.pora .item:first-child .it-more.undo');
+    ok((await page.textContent('.pora .item:first-child .it-more.undo')).includes('Cofnąć?'), '↶ pyta o potwierdzenie');
+    await s.zrzut('20-cofnij');
+    await page.click('.pora .item:first-child .it-more.undo');
+    await page.waitForFunction(() => !document.querySelector('.pora .item:first-child .it-more.undo'));
+    await czysto();
+    ok(s.wiersze().slice(-1)[0]['Stan'] === 'cofnięty', '↶ cofnął wpis w arkuszu');
+
+    // Historia: ostatnie wpisy z cofaniem
+    await page.click('#tabbar [data-tab="historia"]');
+    await page.waitForSelector('.cal-g');
+    ok((await page.locator('.cal-d').count()) >= 28, 'kalendarz miesiąca');
+    ok((await page.textContent('.card.day')).includes(L.dataPl(dzis)), 'panel dzisiejszego dnia');
+    await s.zrzut('21-historia'); await s.uklad('Historia');
+    // wczoraj: uzupełnienie brakującego podania
+    const wczoraj = L.plus(dzis, -1);
+    await page.click(`[data-h-day="${wczoraj}"]`);
+    await page.waitForFunction(d => document.querySelector('.card.day h2').textContent.includes(d), L.dataPl(wczoraj));
+    const n0 = s.wiersze().length;
+    await page.click('.card.day [data-h-take]');
+    await czysto();
+    let w = s.wiersze().slice(-1)[0];
+    ok(s.wiersze().length === n0 + 1 && w['Data'] === wczoraj && w['Później'] === 'TAK' && w['Status'] === 'wzięte', 'uzupełnienie wczoraj z Historii: ' + JSON.stringify(w));
+    await page.click('.card.day [data-h-nw]');
+    await czysto();
+    ok(s.wiersze().slice(-1)[0]['Status'] === 'nie pamiętam', '„Nie pamiętam” z Historii');
+    // poprzedni miesiąc: getLog (starsze niż okno modelu nie ma, ale kalendarz działa)
+    await page.click('[data-h-mies="-1"]');
+    await page.waitForFunction(() => !document.querySelector('.cal-d.st-load'));
+    await page.click('[data-h-mies="1"]');
+    // lista ostatnich wpisów i cofnięcie
+    await page.click('[data-h-widok="lista"]');
+    await page.waitForSelector('[data-h-undo]');
+    const ileList = await page.locator('[data-h-undo]').count();
+    ok(ileList > 5, 'lista ostatnich wpisów: ' + ileList);
+    await s.zrzut('22-ostatnie');
+    await page.click('[data-h-undo] >> nth=0'); await page.click('[data-h-undo] >> nth=0');
+    await czysto();
+    ok(s.wiersze().filter(x => x['Stan'] === 'cofnięty').length === 2, 'cofnięcie z listy ostatnich');
+    await page.click('[data-h-widok="kal"]');
+
+    // Raport
+    await page.click('#tabbar [data-tab="raport"]');
+    await page.waitForSelector('[data-r-show]');
+    await page.click('[data-r-okres="90"]');
+    await page.click('[data-r-show]');
+    await page.waitForSelector('.report .rb');
+    const rap = await page.textContent('.report');
+    ok(/Raport regularności: Kardiologia/.test(rap) && /regularności · wzięte \d+ z \d+/.test(rap) && rap.includes('Doraźnie') === false, 'raport: ' + rap.slice(0, 160));
+    ok(rap.includes('Zmiany w okresie') && rap.includes('koniec: Staryl') && rap.includes('początek: Testolek'), 'raport: zmiany leków');
+    ok(await page.isVisible('[data-print]'), 'przycisk druku');
+    await s.zrzut('23-raport'); await s.uklad('Raport');
+    await page.click('[data-r-ter="T2"]'); await page.click('[data-r-show]');
+    await page.waitForFunction(() => /Dermatologia/.test(document.querySelector('.report h2').textContent));
+    ok((await page.textContent('.report')).includes('Brak danych'), 'raport drugiej terapii z brakami danych');
+    await page.emulateMedia({ media: 'print' });
+    await s.zrzut('24-raport-druk');
+    await page.emulateMedia({ media: 'screen' });
+
+    // Terapie: nowa terapia i pozycja z aplikacji
+    await page.click('#tabbar [data-tab="terapie"]');
+    await page.click('[data-new-t]');
+    await page.waitForSelector('#fTNazwa');
+    await page.fill('#fTNazwa', 'Okulistyka'); await page.fill('#fTLek', 'dr Zmyślona');
+    await page.click('[data-f-kolor="#9b7be0"]');
+    await page.click('[data-f-save-t]');
+    await page.waitForFunction(() => !document.querySelector('#sheet.open') && /Okulistyka/.test(document.getElementById('app').textContent));
+    ok(s.env.wiersze('Terapie').slice(-1)[0]['Kolor'] === '#9b7be0', 'nowa terapia w arkuszu');
+    await page.click('[data-new-p="T3"]');
+    await page.waitForSelector('#fNazwa');
+    await s.uklad('formularz pozycji');
+    await page.fill('#fNazwa', 'Krople Próbne'); await page.fill('#fPostac', 'krople'); await page.fill('#fDawka', '2'); await page.fill('#fJedn', 'kropla');
+    await page.click('[data-f-ht="tydz"]'); await page.fill('#fHN', '2'); await page.click('[data-f-pref="1"]'); await page.click('[data-f-pref="4"]');
+    await page.click('[data-f-pora="wieczór"]');
+    await page.click('[data-f-przyp="godz"]'); await page.fill('#fPrzypG', '20:15');
+    await page.fill('#fOpIl', '300');
+    await s.zrzut('25-nowa-pozycja');
+    await page.click('[data-f-save-p]');
+    await page.waitForFunction(() => !document.querySelector('#sheet.open'));
+    const np = s.env.wiersze('Pozycje').slice(-1)[0];
+    ok(np['Nazwa'] === 'Krople Próbne' && np['Harmonogram'] === '2x/tydz wt,pt' && np['Pory'] === 'rano+wieczór' && np['Przypomnienie'] === '20:15' && np['Status'] === 'aktywna' && np['Dawka'] === 2, 'nowa pozycja w arkuszu: ' + JSON.stringify(np));
+    ok(s.env.wiersze('Opakowania').slice(-1)[0]['Ilość w opakowaniu'] === 300, 'opakowanie nowej pozycji');
+    ok((await page.textContent('#app')).includes('2 razy w tygodniu, najlepiej we wtorek i w piątek'), 'nowa pozycja w Terapiach');
+    // walidacja formularza
+    await page.click('[data-new-p="T3"]'); await page.waitForSelector('#fNazwa');
+    await page.click('[data-f-save-p]');
+    ok((await page.textContent('#fErr')).includes('Podaj nazwę'), 'formularz: brak nazwy');
+    await page.click('#sheetClose'); await page.waitForFunction(() => !document.querySelector('#sheet.open'));
+    // zmiana dawki Testolku od jutra = nowa wersja
+    await page.click('[data-edit-p="P1"]'); await page.waitForSelector('#fDawka');
+    ok(await page.isHidden('#fOdBox'), 'bez zmiany planu nie pyta „od kiedy”');
+    await page.fill('#fDawka', '2');
+    await page.waitForSelector('#fOdBox:not([hidden])');
+    await page.click('#fOdBox [data-f-od] >> nth=1');
+    await page.click('[data-f-save-p]');
+    await page.waitForFunction(() => !document.querySelector('#sheet.open'));
+    const poz = s.env.wiersze('Pozycje');
+    ok(poz[0]['Status'] === 'zakończona' && poz[0]['Do'] === dzis && poz.slice(-1)[0]['Poprzednia'] === 'P1' && poz.slice(-1)[0]['Od'] === L.plus(dzis, 1), 'nowa wersja pozycji od jutra');
+    // korekta zapasu
+    await page.click('.stock [data-fix="O1"]');
+    await page.waitForSelector('[data-sh-fix]');
+    await page.fill('#shQty', '30');
+    await page.click('[data-sh-fix]');
+    await czysto();
+    ok(s.wiersze().slice(-1)[0]['Status'] === 'korekta' && s.wiersze().slice(-1)[0]['Ilość'] === 30, 'korekta w dzienniku');
+    ok(/Zostało 30 z 60 wdechów/.test(await page.textContent('#app')), 'korekta na ekranie');
+    await s.zrzut('26-terapie-v2'); await s.uklad('Terapie v2');
+
+    // Ustawienia: drugie przypomnienie, godziny pór, skórki
+    await page.click('[data-tab="ustawienia"]');
+    await page.click('[data-drugie="30"]');
+    await page.waitForSelector('[data-drugie="30"][aria-pressed="true"]');
+    ok(JSON.parse(s.env.props.REMINDERS).drugie === 30, 'drugie przypomnienie zapisane');
+    await page.fill('[data-pora-g="rano"]', '07:15'); await page.fill('[data-pora-w="rano"]', '');
+    await page.click('[data-pory-save]');
+    await page.waitForFunction(() => document.querySelector('[data-pora-g="rano"]').value === '07:15' && !document.querySelector('[data-pory-save]').disabled);
+    ok(s.env.wiersze('Pory dnia')[0]['Godzina'] === '07:15', 'godzina pory zapisana');
+    await s.zrzut('27-ustawienia-v2'); await s.uklad('Ustawienia v2');
+    for (const skin of ['jasny', 'neon', 'synthwave', 'racer', 'klasyczny']) {
+      await page.click(`[data-skin="${skin}"]`);
+      ok((await page.evaluate(() => document.documentElement.getAttribute('data-skin') || 'klasyczny')) === skin, 'skórka ' + skin);
+      if (skin !== 'klasyczny') { await page.click('#tabbar [data-tab="dzis"]'); await s.zrzut('28-skorka-' + skin); await page.click('[data-tab="ustawienia"]'); }
+    }
+    // linki z przypomnienia i skróty
+    await page.goto(base + '?pora=wiecz%C3%B3r&d=' + dzis);
+    await page.waitForSelector('.card.pora.flash[data-pora="wieczór"]');
+    ok(page.url() === base, 'link z przypomnienia: karta wieczoru, adres wyczyszczony');
+    await page.goto(base + '?akcja=dorazne');
+    await page.waitForSelector('#sheet.open [data-sh-adhoc]');
+    ok(true, 'skrót „Doraźnie” otwiera okno użycia');
+    await page.goto(base + '?pora=rano&d=' + L.plus(dzis, -2));
+    await page.waitForSelector('.card.day');
+    ok((await page.textContent('.card.day h2')).includes(L.dataPl(L.plus(dzis, -2))), 'link ze starszego przypomnienia otwiera Historię tego dnia');
     await s.ctx.close();
   }
 
@@ -258,6 +407,10 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await s.zrzut('terapie'); await s.uklad('Terapie');
     await s.page.click('[data-tab="ustawienia"]'); await s.page.waitForSelector('#h-dev');
     await s.zrzut('ustawienia'); await s.uklad('Ustawienia');
+    await s.page.click('#tabbar [data-tab="historia"]'); await s.page.waitForSelector('.cal-g');
+    await s.zrzut('historia'); await s.uklad('Historia');
+    await s.page.click('#tabbar [data-tab="raport"]'); await s.page.click('[data-r-show]'); await s.page.waitForSelector('.report');
+    await s.zrzut('raport'); await s.uklad('Raport');
     await s.ctx.close();
   }
 

@@ -14,5 +14,11 @@
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Rano: odhacz", "short_name": "Rano", "url": "./?pora=rano", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Wieczór: odhacz", "short_name": "Wieczór", "url": "./?pora=wiecz%C3%B3r", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Użycie doraźne", "short_name": "Doraźnie", "url": "./?akcja=dorazne", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Historia", "short_name": "Historia", "url": "./?tab=historia", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
