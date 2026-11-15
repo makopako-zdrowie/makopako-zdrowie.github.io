@@ -1,5 +1,5 @@
 /****************************************************************
- * ZDROWIE – skrypt Apps Script (v1.0, 15.11.2026)
+ * ZDROWIE – skrypt Apps Script (v1.1, 15.11.2026)
  *
  * Rdzeń przeniesiony z Finansów v19 (bez zmian w działaniu):
  *  - API dla strony: doPost {token|key, fn, arg} jako text/plain, odpowiedź JSON, bez HtmlService,
@@ -24,7 +24,7 @@
  ****************************************************************/
 
 const CORE = {
-  VERSION: '1.0',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
+  VERSION: '1.1',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
   APP_NAME: 'Zdrowie',
   DEVICES_SHEET: 'Urządzenia'
 };
@@ -368,7 +368,7 @@ function withLock_(fn) {
 /* Poniższy blok to kopia pliku logika.js ze strony. Nie zmieniaj go tutaj: wstawia go narzedzia/zbuduj.js. */
 /* >>> LOGIKA >>> */
 /****************************************************************
- * ZDROWIE – wspólna logika (v1.0)
+ * ZDROWIE – wspólna logika (v1.1)
  *
  * Czyste funkcje bez dostępu do strony i do arkusza: harmonogramy, plan dnia, tydzień, doraźne, zapasy,
  * lista przypomnień. Ten sam tekst jest w stronie (logika.js) i w Code.gs (między znacznikami LOGIKA),
@@ -476,6 +476,14 @@ var Logika = (function () {
   function ilosc(n, j) { const jj = jednostka(n, j); return liczba(n) + (jj ? ' ' + jj : ''); }
 
   /* ---------------- przygotowanie modelu ---------------- */
+  /** Kolumna „Przypomnienie”: puste = o godzinie pory, „nie” = bez przypomnienia, „22:00” = własna godzina. */
+  function przypomnienie(t) {
+    const s = String(t == null ? '' : t).trim().toLowerCase();
+    if (!s) return '';
+    if (/^(nie|bez|brak|-|–)/.test(s)) return 'nie';
+    const m = s.match(/^(\d{1,2})[:.](\d{2})$/);
+    return m && +m[1] < 24 && +m[2] < 60 ? two(+m[1]) + ':' + m[2] : '';
+  }
   const klucz = s => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
   const DOMYSLNA_PORA = 'w ciągu dnia';
   function przygotuj(model) {
@@ -486,7 +494,8 @@ var Logika = (function () {
     const pozycje = (model.pozycje || []).map(p => Object.assign({}, p, {
       h: harmonogram(p.harmonogram),
       poryN: String(p.pory || '').split(/[+,;]/).map(klucz).filter(Boolean),
-      dawkaN: p.dawka > 0 ? p.dawka : 1
+      dawkaN: p.dawka > 0 ? p.dawka : 1,
+      przyp: przypomnienie(p.przypomnienie)
     }));
     const pozMap = {}; pozycje.forEach(p => { pozMap[p.id] = p; });
     const otwarte = {}, skonczone = {};
@@ -663,25 +672,30 @@ var Logika = (function () {
   }
 
   /* ---------------- przypomnienia (dla Kalendarza) ---------------- */
-  /** Na każdy z najbliższych dni: pory, w których zostało coś bez odpowiedzi. [{ data, klucz, nazwa, godzina, nazwy }] */
+  /**
+   * Na każdy z najbliższych dni: co zostało bez odpowiedzi, zgrupowane po godzinie przypomnienia
+   * (godzina pory albo własna godzina pozycji; pozycje z „nie” pomijamy). [{ data, klucz, nazwa, godzina, nazwy }]
+   */
   function przypomnienia(ctx, idx, dzis, ileDni) {
     const out = [];
     for (let k = 0; k < (ileDni || 7); k++) {
-      const d = plus(dzis, k), karty = {}, kolej = [];
-      const dodaj = (kl, nazwa) => { if (!karty[kl]) { karty[kl] = []; kolej.push(kl); } karty[kl].push(nazwa); };
-      dzien(ctx, idx, d).forEach(karta => karta.pozycje.forEach(x => { if (x.stan === 'do') dodaj(karta.klucz, x.p.nazwa); }));
-      ctx.pozycje.forEach(p => { if (p.h.typ === 'tydz' && wZakresie(p, d) && tygodniowaDzis(p, idx, d)) dodaj(poryPozycji(p)[0], p.nazwa); });
-      kolej.forEach(kl => {
-        const pora = ctx.poryMap[kl];
-        out.push({ data: d, klucz: kl, nazwa: pora ? pora.nazwa : kl, godzina: godzinaPory(pora, d) || '12:00', nazwy: karty[kl] });
-      });
+      const d = plus(dzis, k), grupy = {}, kolej = [];
+      const dodaj = (p, kl) => {
+        if (p.przyp === 'nie') return;
+        const pora = ctx.poryMap[kl], godz = p.przyp || godzinaPory(pora, d) || '12:00', g = godz + '|' + kl;
+        if (!grupy[g]) { grupy[g] = { data: d, klucz: kl, nazwa: pora ? pora.nazwa : kl, godzina: godz, nazwy: [] }; kolej.push(g); }
+        grupy[g].nazwy.push(p.nazwa);
+      };
+      dzien(ctx, idx, d).forEach(karta => karta.pozycje.forEach(x => { if (x.stan === 'do') dodaj(x.p, karta.klucz); }));
+      ctx.pozycje.forEach(p => { if (p.h.typ === 'tydz' && wZakresie(p, d) && tygodniowaDzis(p, idx, d)) dodaj(p, poryPozycji(p)[0]); });
+      kolej.sort().forEach(g => out.push(grupy[g]));
     }
     return out;
   }
 
   return { num: num, str: str, plus: plus, dzienTyg: dzienTyg, poczatekTyg: poczatekTyg, poprawnaData: poprawnaData, dataPl: dataPl,
     DNI: DNI, DNI_W: DNI_W, DNI_SKROT: DNI_SKROT, harmonogram: harmonogram, opisHarmonogramu: opisHarmonogramu,
-    liczba: liczba, jednostka: jednostka, ilosc: ilosc, klucz: klucz, przygotuj: przygotuj, poryPozycji: poryPozycji,
+    liczba: liczba, jednostka: jednostka, ilosc: ilosc, klucz: klucz, przypomnienie: przypomnienie, przygotuj: przygotuj, poryPozycji: poryPozycji,
     kluczSlotu: kluczSlotu, indeks: indeks, stanWpisu: stanWpisu, wZakresie: wZakresie, wypada: wypada, godzinaPory: godzinaPory,
     dzien: dzien, zalegle: zalegle, tydzien: tydzien, tygodniowaDzis: tygodniowaDzis, dorazne: dorazne,
     zuzycie: zuzycie, zapasy: zapasy, przypomnienia: przypomnienia };
@@ -694,7 +708,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Logika;
 /** Zakładki aplikacji. Kolumny odnajdujemy po nazwie z wiersza 1, więc można je przestawiać i dopisywać własne. */
 const TABS = {
   TERAPIE: { name: 'Terapie', head: ['ID', 'Nazwa', 'Lekarz', 'Specjalizacja', 'Od', 'Do', 'Kolor', 'Uwagi'], text: ['Od', 'Do'] },
-  POZYCJE: { name: 'Pozycje', head: ['ID', 'Terapia', 'Nazwa', 'Rodzaj', 'Postać', 'Dawka', 'Jednostka', 'Harmonogram', 'Pory', 'Doraźnie', 'Warunki', 'Od', 'Do', 'Status', 'Uwagi'], text: ['Harmonogram', 'Pory', 'Od', 'Do'] },
+  POZYCJE: { name: 'Pozycje', head: ['ID', 'Terapia', 'Nazwa', 'Rodzaj', 'Postać', 'Dawka', 'Jednostka', 'Harmonogram', 'Pory', 'Doraźnie', 'Warunki', 'Od', 'Do', 'Status', 'Uwagi', 'Przypomnienie'], text: ['Harmonogram', 'Pory', 'Od', 'Do', 'Przypomnienie'] },
   PORY: { name: 'Pory dnia', head: ['Nazwa', 'Godzina', 'Godzina w weekend', 'Kolejność'], text: ['Godzina', 'Godzina w weekend'] },
   DZIENNIK: { name: 'Dziennik', head: ['ID', 'Zapisano', 'Data', 'Godzina', 'Pora', 'Pozycja', 'Nazwa', 'Status', 'Ilość', 'Powód', 'Później', 'Notatka', 'Urządzenie', 'Stan'], text: ['ID', 'Zapisano', 'Data', 'Godzina'] },
   OPAKOWANIA: { name: 'Opakowania', head: ['ID', 'Pozycja', 'Otwarto', 'Ilość w opakowaniu', 'Ważne do', 'Alert (dni przed)', 'Skończone', 'Uwagi'], text: ['Otwarto', 'Ważne do', 'Skończone'] }
@@ -799,8 +813,12 @@ function buildModel_() {
     const k = numCell_(r['Kolejność']);
     return { nazwa: textCell_(r['Nazwa']), godzina: timeCell_(r['Godzina']), weekend: timeCell_(r['Godzina w weekend']), kolejnosc: k === null ? 100 + i : k };
   });
+  const tPd = readTable_(ss, TABS.POZYCJE, true), widok = {};                // godziny tak, jak je widać w arkuszu
+  tPd.rows.forEach(function (r) { widok[r._row] = r; });
   const pozycje = tP.rows.filter(function (r) { return !isEmpty_(r['ID']); }).map(function (r) {
-    return { id: textCell_(r['ID']), terapia: textCell_(r['Terapia']), nazwa: textCell_(r['Nazwa']), rodzaj: textCell_(r['Rodzaj']).toLowerCase(),
+    const przyp = textCell_(widok[r._row] ? widok[r._row]['Przypomnienie'] : '');
+    if (przyp && !Logika.przypomnienie(przyp)) warnings.push('Pozycja „' + textCell_(r['Nazwa']) + '”: nie rozumiem przypomnienia „' + przyp + '”. Wpisz godzinę (np. 22:00), „nie” albo zostaw puste.');
+    return { przypomnienie: Logika.przypomnienie(przyp), id: textCell_(r['ID']), terapia: textCell_(r['Terapia']), nazwa: textCell_(r['Nazwa']), rodzaj: textCell_(r['Rodzaj']).toLowerCase(),
       postac: textCell_(r['Postać']), dawka: numCell_(r['Dawka']), jednostka: textCell_(r['Jednostka']), harmonogram: textCell_(r['Harmonogram']),
       pory: textCell_(r['Pory']), dorazne: boolCell_(r['Doraźnie']), warunki: textCell_(r['Warunki']), od: dateCell_(r['Od']), do: dateCell_(r['Do']),
       status: textCell_(r['Status']).toLowerCase() || 'aktywna', uwagi: textCell_(r['Uwagi']) };
@@ -1057,7 +1075,7 @@ function remindersWanted_(today) {
   const at = function (iso, hm) { const p = String(iso).split('-').map(Number), t = String(hm || '09:00').split(':').map(Number); return new Date(p[0], p[1] - 1, p[2], t[0] || 0, t[1] || 0, 0); };
   Logika.przypomnienia(ctx, idx, today, 7).forEach(function (x) {
     const nazwa = x.nazwa.charAt(0).toUpperCase() + x.nazwa.slice(1);
-    want['pora:' + x.data + ':' + x.klucz] = { title: (PORA_EMOJI[x.klucz] || '⏰') + ' ' + nazwa + ': ' + x.nazwy.join(', '), start: at(x.data, x.godzina),
+    want['pora:' + x.data + ':' + x.klucz + ':' + x.godzina] = { title: (PORA_EMOJI[x.klucz] || '⏰') + ' ' + nazwa + ': ' + x.nazwy.join(', '), start: at(x.data, x.godzina),
       desc: 'Odhacz w aplikacji Zdrowie. Gdy wszystko z tej pory jest odhaczone, wydarzenie znika.' };
   });
   Logika.zapasy(ctx, idx, today).forEach(function (z) {
@@ -1184,7 +1202,7 @@ function seedSheet_(ss, dane, log) {
   fill(TABS.POZYCJE, (dane.pozycje || []).map(function (x) {
     return { 'ID': x.id, 'Terapia': nz(x.terapia), 'Nazwa': nz(x.nazwa), 'Rodzaj': nz(x.rodzaj), 'Postać': nz(x.postac), 'Dawka': nz(x.dawka), 'Jednostka': nz(x.jednostka),
       'Harmonogram': nz(x.harmonogram), 'Pory': nz(x.pory), 'Doraźnie': x.dorazne ? 'TAK' : '', 'Warunki': nz(x.warunki), 'Od': nz(x.od), 'Do': nz(x.do),
-      'Status': nz(x.status) || 'aktywna', 'Uwagi': uwagi(x) };
+      'Status': nz(x.status) || 'aktywna', 'Uwagi': uwagi(x), 'Przypomnienie': nz(x.przypomnienie) };
   }));
   fill(TABS.OPAKOWANIA, (dane.opakowania || []).map(function (x) {
     return { 'ID': x.id, 'Pozycja': x.pozycja, 'Otwarto': nz(x.otwarto), 'Ilość w opakowaniu': nz(x.ilosc !== undefined ? x.ilosc : x.dawek), 'Ważne do': nz(x.wazneDo),

@@ -5,7 +5,7 @@
  * Plan dnia, tydzień i zapasy liczy tu Logika (logika.js), więc odhaczenie widać od razu, także bez internetu:
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  ****************************************************************/
-window.CLIENT_VERSION = '1.0';
+window.CLIENT_VERSION = '1.1';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -64,7 +64,8 @@ window.CLIENT_VERSION = '1.0';
   const lekowe = p => p.rodzaj === 'lek' || p.rodzaj === 'suplement' || !p.rodzaj;
   const slowo = p => (lekowe(p) ? 'wzięte' : 'zrobione');
   const dawkaTxt = (p, n) => (p.dawka > 0 || n > 0 ? L.ilosc(n > 0 || n === 0 ? n : p.dawka, p.jednostka) : '');
-  const podpis = p => [dawkaTxt(p), p.warunki].filter(Boolean).join(' · ');
+  const podpis = p => [dawkaTxt(p), p.warunki, p.przyp && p.przyp !== 'nie' ? '⏰ ' + p.przyp : ''].filter(Boolean).join(' · ');
+  const opisPrzyp = p => (p.przyp === 'nie' ? 'bez przypomnienia' : p.przyp ? 'przypomnienie o ' + p.przyp : '');
   const kolor = p => { const t = ctx.terapie[p.terapia]; return t && t.kolor ? t.kolor : 'var(--line)'; };
   const nazwaPory = k => { const p = ctx.poryMap[k]; return p ? p.nazwa : k; };
   const slot = (data, pora, p) => esc(data + '|' + pora + '|' + p.id);
@@ -183,7 +184,7 @@ window.CLIENT_VERSION = '1.0';
       if (t.pominiete) info += `, pominięte ${t.pominiete}`;
       if (!gotowe) info += t.wpisDzis ? '' : t.prefDzis ? ' · najlepiej dziś' : t.prefMinal ? ' · czeka do niedzieli' : p.h.pref.length ? ' · najlepiej ' + p.h.pref.map(d => L.DNI_W[d]).join(' i ') : t.dniDoKonca === 0 ? ' · dziś ostatni dzień' : '';
       const st = gotowe || t.wpisDzis ? (t.wpisDzis ? L.stanWpisu(t.wpisDzis) : 'wziete') : 'do';
-      const sub = [dawkaTxt(p), p.warunki].filter(Boolean).join(' · ');
+      const sub = podpis(p);
       return `<li class="item st-${st}" style="--c:${kolor(p)}">
         <button type="button" class="it-main" data-week="${esc(p.id)}" aria-label="${esc(p.nazwa)}: ${esc(info)}">
           <span class="chk" aria-hidden="true">${st === 'pominiete' ? '–' : CHECK}</span>
@@ -239,7 +240,7 @@ window.CLIENT_VERSION = '1.0';
       <div class="stock-txt">${txt}</div><div class="acts"><button type="button" class="edit" data-finish="${esc(o.id)}">Skończyło się</button></div></div>`;
   }
   function pozycjaHtml(p, S, zap, dor) {
-    const opis = [dawkaTxt(p), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h), p.poryN.map(nazwaPory).join(' i ')].filter(Boolean).join(' · ');
+    const opis = [dawkaTxt(p), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h), p.poryN.map(nazwaPory).join(' i '), opisPrzyp(p)].filter(Boolean).join(' · ');
     const badge = p.status === 'planowana' ? '<span class="badge plan">planowana</span>' : p.status !== 'aktywna' ? '<span class="badge end">zakończona</span>' : '';
     const okres = p.status === 'aktywna' ? (p.od ? 'od ' + L.dataPl(p.od, S.dzis) : '') : [p.od ? L.dataPl(p.od, S.dzis) : '', p.do ? L.dataPl(p.do, S.dzis) : ''].filter(Boolean).join(' – ');
     const d = dor[p.id];
@@ -276,7 +277,7 @@ window.CLIENT_VERSION = '1.0';
     const pory = ctx.pory.map(p => `<li>${esc(cap(p.nazwa))}: <span class="num">${esc(p.godzina || 'bez godziny')}</span>${p.weekend && p.weekend !== p.godzina ? `, w weekend <span class="num">${esc(p.weekend)}</span>` : ''}</li>`).join('');
     const czeka = Rdzen.outbox.list().length;
     return `<section class="panel" aria-labelledby="h-rem"><div class="panel-head"><div><h2 id="h-rem">Przypomnienia</h2>
-        <p class="desc">Kalendarz Google „${esc(r.calendar || 'Zdrowie – przypomnienia')}”: jedno wydarzenie na porę dnia z powiadomieniem. Znika, gdy wszystko z pory jest odhaczone.</p></div>
+        <p class="desc">Kalendarz Google „${esc(r.calendar || 'Zdrowie – przypomnienia')}”: jedno wydarzenie na porę dnia z powiadomieniem. Znika, gdy wszystko z pory jest odhaczone. Inną godzinę albo „nie” dla pojedynczej pozycji wpisujesz w arkuszu, w kolumnie „Przypomnienie”.</p></div>
         <button type="button" class="btn-sm${r.enabled ? '' : ' primary'}" data-rem="${r.enabled ? '0' : '1'}">${r.enabled ? 'Wyłącz' : 'Włącz'}</button></div>
       <p class="line">${r.enabled ? `Włączone. Wydarzeń w kalendarzu: ${r.count || 0}${kiedySync ? ', ostatnia zmiana ' + kiedySync : ''}.` : 'Wyłączone.'}</p>
       ${r.error ? `<p class="err">${esc(r.error)}</p>` : ''}

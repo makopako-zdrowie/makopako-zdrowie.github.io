@@ -1,5 +1,5 @@
 /****************************************************************
- * ZDROWIE – wspólna logika (v1.0)
+ * ZDROWIE – wspólna logika (v1.1)
  *
  * Czyste funkcje bez dostępu do strony i do arkusza: harmonogramy, plan dnia, tydzień, doraźne, zapasy,
  * lista przypomnień. Ten sam tekst jest w stronie (logika.js) i w Code.gs (między znacznikami LOGIKA),
@@ -107,6 +107,14 @@ var Logika = (function () {
   function ilosc(n, j) { const jj = jednostka(n, j); return liczba(n) + (jj ? ' ' + jj : ''); }
 
   /* ---------------- przygotowanie modelu ---------------- */
+  /** Kolumna „Przypomnienie”: puste = o godzinie pory, „nie” = bez przypomnienia, „22:00” = własna godzina. */
+  function przypomnienie(t) {
+    const s = String(t == null ? '' : t).trim().toLowerCase();
+    if (!s) return '';
+    if (/^(nie|bez|brak|-|–)/.test(s)) return 'nie';
+    const m = s.match(/^(\d{1,2})[:.](\d{2})$/);
+    return m && +m[1] < 24 && +m[2] < 60 ? two(+m[1]) + ':' + m[2] : '';
+  }
   const klucz = s => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
   const DOMYSLNA_PORA = 'w ciągu dnia';
   function przygotuj(model) {
@@ -117,7 +125,8 @@ var Logika = (function () {
     const pozycje = (model.pozycje || []).map(p => Object.assign({}, p, {
       h: harmonogram(p.harmonogram),
       poryN: String(p.pory || '').split(/[+,;]/).map(klucz).filter(Boolean),
-      dawkaN: p.dawka > 0 ? p.dawka : 1
+      dawkaN: p.dawka > 0 ? p.dawka : 1,
+      przyp: przypomnienie(p.przypomnienie)
     }));
     const pozMap = {}; pozycje.forEach(p => { pozMap[p.id] = p; });
     const otwarte = {}, skonczone = {};
@@ -294,25 +303,30 @@ var Logika = (function () {
   }
 
   /* ---------------- przypomnienia (dla Kalendarza) ---------------- */
-  /** Na każdy z najbliższych dni: pory, w których zostało coś bez odpowiedzi. [{ data, klucz, nazwa, godzina, nazwy }] */
+  /**
+   * Na każdy z najbliższych dni: co zostało bez odpowiedzi, zgrupowane po godzinie przypomnienia
+   * (godzina pory albo własna godzina pozycji; pozycje z „nie” pomijamy). [{ data, klucz, nazwa, godzina, nazwy }]
+   */
   function przypomnienia(ctx, idx, dzis, ileDni) {
     const out = [];
     for (let k = 0; k < (ileDni || 7); k++) {
-      const d = plus(dzis, k), karty = {}, kolej = [];
-      const dodaj = (kl, nazwa) => { if (!karty[kl]) { karty[kl] = []; kolej.push(kl); } karty[kl].push(nazwa); };
-      dzien(ctx, idx, d).forEach(karta => karta.pozycje.forEach(x => { if (x.stan === 'do') dodaj(karta.klucz, x.p.nazwa); }));
-      ctx.pozycje.forEach(p => { if (p.h.typ === 'tydz' && wZakresie(p, d) && tygodniowaDzis(p, idx, d)) dodaj(poryPozycji(p)[0], p.nazwa); });
-      kolej.forEach(kl => {
-        const pora = ctx.poryMap[kl];
-        out.push({ data: d, klucz: kl, nazwa: pora ? pora.nazwa : kl, godzina: godzinaPory(pora, d) || '12:00', nazwy: karty[kl] });
-      });
+      const d = plus(dzis, k), grupy = {}, kolej = [];
+      const dodaj = (p, kl) => {
+        if (p.przyp === 'nie') return;
+        const pora = ctx.poryMap[kl], godz = p.przyp || godzinaPory(pora, d) || '12:00', g = godz + '|' + kl;
+        if (!grupy[g]) { grupy[g] = { data: d, klucz: kl, nazwa: pora ? pora.nazwa : kl, godzina: godz, nazwy: [] }; kolej.push(g); }
+        grupy[g].nazwy.push(p.nazwa);
+      };
+      dzien(ctx, idx, d).forEach(karta => karta.pozycje.forEach(x => { if (x.stan === 'do') dodaj(x.p, karta.klucz); }));
+      ctx.pozycje.forEach(p => { if (p.h.typ === 'tydz' && wZakresie(p, d) && tygodniowaDzis(p, idx, d)) dodaj(p, poryPozycji(p)[0]); });
+      kolej.sort().forEach(g => out.push(grupy[g]));
     }
     return out;
   }
 
   return { num: num, str: str, plus: plus, dzienTyg: dzienTyg, poczatekTyg: poczatekTyg, poprawnaData: poprawnaData, dataPl: dataPl,
     DNI: DNI, DNI_W: DNI_W, DNI_SKROT: DNI_SKROT, harmonogram: harmonogram, opisHarmonogramu: opisHarmonogramu,
-    liczba: liczba, jednostka: jednostka, ilosc: ilosc, klucz: klucz, przygotuj: przygotuj, poryPozycji: poryPozycji,
+    liczba: liczba, jednostka: jednostka, ilosc: ilosc, klucz: klucz, przypomnienie: przypomnienie, przygotuj: przygotuj, poryPozycji: poryPozycji,
     kluczSlotu: kluczSlotu, indeks: indeks, stanWpisu: stanWpisu, wZakresie: wZakresie, wypada: wypada, godzinaPory: godzinaPory,
     dzien: dzien, zalegle: zalegle, tydzien: tydzien, tygodniowaDzis: tygodniowaDzis, dorazne: dorazne,
     zuzycie: zuzycie, zapasy: zapasy, przypomnienia: przypomnienia };

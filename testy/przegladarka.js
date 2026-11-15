@@ -60,7 +60,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
   async function polacz(s) {
     await s.page.goto(base);
     await s.page.click('[data-mode="key"]');
-    await s.page.fill('#suUrl', URL_SKRYPTU); await s.page.fill('#suKey', s.klucz); await s.page.fill('#suName', 'Telefon testowy');
+    if (await s.page.$('#suUrl')) await s.page.fill('#suUrl', URL_SKRYPTU); await s.page.fill('#suKey', s.klucz); await s.page.fill('#suName', 'Telefon testowy');
     await s.page.click('#suGo');
     await s.page.waitForSelector('.lead');
   }
@@ -267,7 +267,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     s.env.sheets.filter(x => x.name !== 'Urządzenia').forEach(x => { x.rows.length = 1; });
     await s.page.goto(base);
     await s.page.click('[data-mode="key"]');
-    await s.page.fill('#suUrl', URL_SKRYPTU); await s.page.fill('#suKey', 'zly-klucz-zly-klucz-zly-klucz'); await s.page.click('#suGo');
+    if (await s.page.$('#suUrl')) await s.page.fill('#suUrl', URL_SKRYPTU); await s.page.fill('#suKey', 'zly-klucz-zly-klucz-zly-klucz'); await s.page.click('#suGo');
     await s.page.waitForFunction(() => document.getElementById('suErr').textContent.length > 0);
     ok((await s.page.textContent('#suErr')).includes('Niepoprawny klucz'), 'zły klucz: komunikat');
     await s.page.fill('#suKey', s.klucz); await s.page.click('#suGo');

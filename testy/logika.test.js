@@ -163,7 +163,7 @@ test('przypomnienia: jedno na porę, tylko to, co zostało, pozycje tygodniowe w
   const ctx = L.przygotuj(model([poz({}), poz({ id: 'P2', nazwa: 'Krople', pory: 'rano' }), poz({ id: 'W', nazwa: 'Peeling', harmonogram: '1x/tydz nd', pory: 'w ciągu dnia', od: d(-20) })]));
   let r = L.przypomnienia(ctx, L.indeks([wz(DZIS, 'rano', 'P1')]), DZIS, 7);
   const dzis = r.filter(x => x.data === DZIS);
-  assert.deepEqual(dzis.map(x => x.klucz + ' ' + x.godzina + ' ' + x.nazwy.join('+')), ['rano 09:00 Krople', 'wieczór 22:00 Testolek', 'w ciągu dnia 13:00 Peeling']);
+  assert.deepEqual(dzis.map(x => x.klucz + ' ' + x.godzina + ' ' + x.nazwy.join('+')), ['rano 09:00 Krople', 'w ciągu dnia 13:00 Peeling', 'wieczór 22:00 Testolek']);
   assert.equal(r.filter(x => x.data === d(1) && x.klucz === 'rano')[0].godzina, '07:30');
   assert.equal(r.filter(x => x.klucz === 'w ciągu dnia').length, 1);          // peeling tylko w niedzielę
   assert.equal(r.length, 1 + 2 * 7);
@@ -176,4 +176,21 @@ test('doraźne: liczba dziś i w tygodniu', () => {
   const u = (data) => ({ id: 'u' + Math.random(), data, pozycja: 'P1', status: 'doraźnie', ilosc: 1 });
   const r = L.dorazne(ctx, L.indeks([u(DZIS), u(d(-1)), u(d(-6)), u(d(-7))]), DZIS)[0];
   assert.equal(r.dzis.length, 1); assert.equal(r.tydzien, 3);
+});
+
+test('przypomnienie pozycji: własna godzina, „nie”, grupowanie po godzinie', () => {
+  assert.equal(L.przypomnienie(''), ''); assert.equal(L.przypomnienie('NIE'), 'nie'); assert.equal(L.przypomnienie('bez przypomnienia'), 'nie');
+  assert.equal(L.przypomnienie('7:15'), '07:15'); assert.equal(L.przypomnienie('22.00'), '22:00'); assert.equal(L.przypomnienie('25:00'), ''); assert.equal(L.przypomnienie('wieczorem'), '');
+  const ctx = L.przygotuj(model([
+    poz({ id: 'F', nazwa: 'Inhalator' }),
+    poz({ id: 'V', nazwa: 'Witamina', pory: 'wieczór', przypomnienie: '22:00' }),
+    poz({ id: 'S', nazwa: 'Szampon', pory: 'rano', przypomnienie: 'nie' }),
+    poz({ id: 'W', nazwa: 'Peeling', harmonogram: '1x/tydz nd', pory: 'w ciągu dnia', od: d(-20), przypomnienie: '10:00' })
+  ]));
+  let r = L.przypomnienia(ctx, L.indeks([]), DZIS, 1);
+  assert.deepEqual(r.map(x => x.godzina + ' ' + x.nazwy.join('+')), ['09:00 Inhalator', '10:00 Peeling', '22:00 Inhalator+Witamina']);
+  r = L.przypomnienia(ctx, L.indeks([]), d(1), 1);                           // poniedziałek: wieczór 21:30, witamina osobno o 22:00
+  assert.deepEqual(r.map(x => x.godzina + ' ' + x.nazwy.join('+')), ['07:30 Inhalator', '21:30 Inhalator', '22:00 Witamina']);
+  // szampon nadal jest na liście dnia, tylko bez przypomnienia
+  assert.ok(L.dzien(ctx, L.indeks([]), DZIS)[0].pozycje.some(x => x.p.id === 'S'));
 });

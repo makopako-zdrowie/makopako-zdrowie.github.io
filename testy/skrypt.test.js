@@ -38,7 +38,7 @@ test('dostęp: bez klucza i z błędnym kluczem nic; klucz → przepustka; parow
   assert.equal(env.post({ key: 'zly-klucz', fn: 'refreshData' }).auth, true);
   const call = env.polacz('Telefon');
   const m = call('refreshData');
-  assert.equal(m.version, '1.0'); assert.equal(m.dzis, DZIS);
+  assert.equal(m.version, '1.1'); assert.equal(m.dzis, DZIS);
   assert.equal(m.devices.list.length, 1); assert.ok(m.devices.list[0].current);
   assert.ok(!JSON.stringify(m).includes(env.props.API_KEY));
   const kod = call('pairStart').code;
@@ -212,4 +212,29 @@ test('ręczna zmiana w arkuszu (data jako prawdziwa data, godzina 7:05) jest czy
   env.api.onEdit();
   const m = call('refreshData');
   assert.equal(m.pozycje[0].od, '2026-11-01'); assert.equal(m.pory[0].godzina, '07:05');
+});
+
+test('kolumna „Przypomnienie”: dopisana przez utworzArkusz, czytana z arkusza, wydarzenia o własnej godzinie', () => {
+  const dane = fikcyjneDane(DZIS);
+  dane.pozycje[2].przypomnienie = 'nie';                                   // Witamina Fikcyjna bez przypomnienia
+  dane.pozycje[3].przypomnienie = '22:45';                                 // Maść Próbna o własnej godzinie
+  dane.pozycje[4].przypomnienie = 'kiedyś';                                // nieczytelne
+  const env = nowe({ daneStartowe: dane }), call = env.polacz();
+  const m = call('refreshData');
+  assert.deepEqual(m.pozycje.slice(0, 5).map(p => p.przypomnienie), ['', '', 'nie', '22:45', '']);
+  assert.equal(m.warnings.length, 1); assert.match(m.warnings[0], /nie rozumiem przypomnienia „kiedyś”/);
+  env.api.wlaczPrzypomnienia();
+  const dzis = env.kalendarz.zdarzenia.filter(e => e.start.getDate() === 15 && e.start.getMonth() === 10).map(e => String(e.start.getHours()).padStart(2, '0') + ':' + String(e.start.getMinutes()).padStart(2, '0') + ' ' + e.title).sort();
+  assert.deepEqual(dzis, ['09:00 🌅 Rano: Testolek', '13:00 ☀️ W ciągu dnia: Peeling Zmyślony', '22:00 🌙 Wieczór: Testolek', '22:45 🌙 Wieczór: Maść Próbna']);
+});
+
+test('stary arkusz bez kolumny „Przypomnienie”: działa, a utworzArkusz dopisuje kolumnę bez ruszania danych', () => {
+  const env = nowe(), sh = env.arkusz('Pozycje');
+  sh.rows.forEach(r => { r.length = 15; });                                // jak arkusz z wersji 1.0
+  const call = env.polacz();
+  assert.deepEqual(call('refreshData').warnings, []);
+  env.api.utworzArkusz();
+  assert.equal(sh.rows[0][15], 'Przypomnienie');
+  assert.equal(env.wiersze('Pozycje').length, 7);
+  assert.match(env.dziennik.join(' '), /nowa kolumna „Przypomnienie”/);
 });
