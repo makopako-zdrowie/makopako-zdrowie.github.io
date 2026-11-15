@@ -131,7 +131,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.locator('.late-g').first().locator('[data-late^="tak|"]').first().click();
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     let z = s.wiersze().slice(-1)[0];
-    ok(z['Data'] === L.plus(dzis, -1) && z['Później'] === 'TAK' && z['Godzina'] === '' && z['Status'] === 'wzięte', 'odpowiedź „Tak” za wczoraj: ' + JSON.stringify(z));
+    ok(z['Data'] === L.plus(dzis, -1) && z['Później'] === '' && z['Godzina'] === '' && z['Status'] === 'wzięte', 'odpowiedź „Tak” za wczoraj: ' + JSON.stringify(z));
     await page.locator('.late-g').first().locator('[data-late^="nw|"]').first().click();
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     ok(s.wiersze().slice(-1)[0]['Status'] === 'nie pamiętam', '„Nie pamiętam” zapisane');
@@ -188,6 +188,14 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.waitForSelector('.lead strong');
     ok((await page.textContent('.lead')).includes('wszystko odhaczone'), 'wszystko odhaczone: ' + await page.textContent('.lead'));
     await s.zrzut('06-dzis-gotowe');
+
+    // ⟳ pobiera dane prosto z arkusza (bez pamięci skryptu)
+    const zapytania = [];
+    page.on('request', r => { if (/script\.google/.test(r.url())) zapytania.push(r.postData()); });
+    await page.click('.ab-act [data-refresh]');
+    await page.waitForFunction(() => !document.body.classList.contains('syncing'));
+    ok(zapytania.some(x => /"fn":"refreshData","arg":\{"force":true\}/.test(x)), 'odświeżenie ręczne z force');
+    ok(!(await page.textContent('#app')).includes('po fakcie'), 'bez dopisku „wpisane po fakcie”');
 
     // planowane: „Zaczynam od dziś” (dwa dotknięcia)
     await page.click('details.planned summary');
@@ -280,7 +288,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.click('.card.day [data-h-take]');
     await czysto();
     let w = s.wiersze().slice(-1)[0];
-    ok(s.wiersze().length === n0 + 1 && w['Data'] === wczoraj && w['Później'] === 'TAK' && w['Status'] === 'wzięte', 'uzupełnienie wczoraj z Historii: ' + JSON.stringify(w));
+    ok(s.wiersze().length === n0 + 1 && w['Data'] === wczoraj && w['Później'] === '' && w['Status'] === 'wzięte', 'uzupełnienie wczoraj z Historii: ' + JSON.stringify(w));
     await page.click('.card.day [data-h-nw]');
     await czysto();
     ok(s.wiersze().slice(-1)[0]['Status'] === 'nie pamiętam', '„Nie pamiętam” z Historii');

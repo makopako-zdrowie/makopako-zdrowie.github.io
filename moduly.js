@@ -102,7 +102,7 @@
     return `<section class="card day" aria-label="${esc(tyt)}"><header class="card-head"><h2>${esc(tyt)}</h2></header>
       ${pusto ? '<p class="desc">Tego dnia nic nie było w planie.</p>' : ''}${plan}
       ${inne.length ? `<h3 class="sh-h">Poza planem</h3>${inne.join('')}` : ''}${tygodniowe.length ? `<h3 class="sh-h">Raz albo kilka razy w tygodniu</h3>${tygodniowe.join('')}` : ''}
-      ${!przyszly && d < t ? '<p class="hint-avg">Wpis za miniony dzień zapisuje się jako „wpisane po fakcie”.</p>' : ''}</section>`;
+    </section>`;
   }
 
   function listaOstatnich(S) {

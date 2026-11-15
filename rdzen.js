@@ -267,10 +267,10 @@
       app = window.startApp(model);
       outbox.flush();
     }
-    function refresh() {
+    function refresh(force) {
       if (!getConn()) return;
       status('busy', '');
-      api('refreshData').then(m => {
+      api('refreshData', force ? { force: true } : null).then(m => {
         if (!m || m.ok === false || !m.generatedAt) throw new Error(m && m.error || 'Skrypt nie zwrócił danych.');
         checkVersion(m.version); markKnown(m); saveCache(m);
         if (app) app.apply(m); else start(m);
@@ -361,7 +361,7 @@
     }
 
     document.addEventListener('click', e => {
-      if (e.target.closest('[data-retry]') || e.target.closest('[data-refresh]')) refresh();
+      if (e.target.closest('[data-retry]') || e.target.closest('[data-refresh]')) refresh(true);   // ręcznie: prosto z arkusza, bez pamięci skryptu
       if (e.target.closest('[data-relink]')) { forgetDevice(); location.reload(); }
     });
     // po powrocie do aplikacji: świeże dane (nie częściej niż co minutę) – ważne przy zmianie dnia

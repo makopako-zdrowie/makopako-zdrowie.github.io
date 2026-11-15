@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.0';
+window.CLIENT_VERSION = '2.0.1';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -97,7 +97,7 @@ window.CLIENT_VERSION = '2.0';
     if (w.status === 'korekta') return 'korekta zapasu: zostało ' + dawkaTxt(p, w.ilosc);
     if (w.status === 'doraźnie') return 'doraźnie' + (w.godz ? ' o ' + w.godz : '') + ' · ' + dawkaTxt(p, w.ilosc);
     const st = L.stanWpisu(w);
-    if (st === 'wziete') return slowo(p) + (w.godz ? ' o ' + w.godz : '') + (w.ilosc > 0 && w.ilosc !== p.dawkaN ? ' · ' + dawkaTxt(p, w.ilosc) : '') + (w.pozniej ? ' · wpisane po fakcie' : '');
+    if (st === 'wziete') return slowo(p) + (w.godz ? ' o ' + w.godz : '') + (w.ilosc > 0 && w.ilosc !== p.dawkaN ? ' · ' + dawkaTxt(p, w.ilosc) : '');
     if (st === 'pominiete') return 'pominięte' + (w.powod ? ': ' + w.powod : '');
     return 'brak danych (nie pamiętam)';
   }
@@ -106,7 +106,7 @@ window.CLIENT_VERSION = '2.0';
   function nowyWpis(p, pora, data, status, extra) {
     const it = { data: data, pora: pora, pozycja: p.id, status: status };
     if (status === 'wzięte' || status === 'doraźnie') it.ilosc = p.dawkaN;
-    if (data === dzis()) it.godz = teraz(); else it.pozniej = true;
+    if (data === dzis()) it.godz = teraz();                  // za miniony dzień: po prostu zrobione albo nie, bez dopisków
     return Object.assign(it, extra || {});
   }
   /** Odhaczenie przez kolejkę: widać je od razu, wysyła się w tle. */
