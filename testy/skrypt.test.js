@@ -21,7 +21,7 @@ test('utworzArkusz: zakładki, nagłówki, dane startowe, powtórne uruchomienie
   assert.equal(env.wiersze('Pozycje').length, 7);
   assert.equal(env.wiersze('Dziennik').length, 8 * 2 + 4 + 1);
   assert.equal(env.wiersze('Pozycje')[6]['Uwagi'], 'Do ustalenia: wszystko po wizycie');
-  assert.equal(env.wiersze('Dziennik')[0]['Później'], 'TAK');
+  assert.equal(env.wiersze('Dziennik')[0]['Później'], ''); assert.equal(env.wiersze('Dziennik')[0]['Notatka'], '');
   env.api.utworzArkusz();
   assert.equal(env.wiersze('Pozycje').length, 7);
   assert.equal(env.wiersze('Dziennik').length, 21);

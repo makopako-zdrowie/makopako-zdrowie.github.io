@@ -288,3 +288,10 @@ test('doraźne: w dniu zmiany dawki (nowa wersja od jutra) przycisk zostaje', ()
   assert.deepEqual(L.dorazne(ctx, L.indeks([]), DZIS).map(x => x.p.id), ['A']);
   assert.deepEqual(L.dorazne(ctx, L.indeks([]), d(1)).map(x => x.p.id), ['B']);
 });
+
+test('raport: brak w tygodniu dla pozycji „raz w tygodniu” trafia do braków z zakresem tygodnia', () => {
+  const ctx = L.przygotuj(model([poz({ id: 'W', harmonogram: '1x/tydz nd', pory: 'w ciągu dnia', od: d(-30) })]));
+  const r = L.raport(ctx, [{ id: 'p', data: d(-7), pora: 'w ciągu dnia', pozycja: 'W', status: 'pominięte', powod: 'brak czasu' }], 'T1', d(-14), DZIS, DZIS);
+  assert.deepEqual(r.bloki[0].brakiTyg, [{ od: d(-14), do: d(-14), n: 1 }]);
+  assert.deepEqual(r.bloki[0].pominiete.map(x => x.powod), ['brak czasu']);
+});

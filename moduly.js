@@ -153,7 +153,11 @@
 
   /* ================= RAPORT ================= */
   const R = { terapia: '', okres: '30', od: '', do: '', pokaz: false };
-  const opisWersji = p => [Z.dawkaTxt(p), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h), p.poryN.map(Z.nazwaPory).join(' i ')].filter(Boolean).join(', ');
+  const MIES_KR = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+  const krotka = d => +d.slice(8) + ' ' + MIES_KR[+d.slice(5, 7) - 1];
+  const pelna = d => L.dataPl(d) + ' ' + d.slice(0, 4);
+  const jak = p => [Z.dawkaTxt(p), p.poryN.map(Z.nazwaPory).join(' i '), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h)].filter(Boolean).join(' · ');
+  const nazwaBloku = b => b.wersje[b.wersje.length - 1].nazwa;
   function zakresRaportu(t) {
     const ctx = Z.ctx();
     if (R.okres === 'wlasny') return { od: R.od || L.plus(t, -29), do: R.do || t };
@@ -163,8 +167,35 @@
     }
     return { od: L.plus(t, -(Number(R.okres) - 1)), do: t };
   }
-  const pelna = d => L.dataPl(d) + ' ' + d.slice(0, 4);
-  const listaDat = (xs, t) => xs.map(x => L.dataPl(x.data, t) + (x.pora ? ' ' + Z.nazwaPory(x.pora) : '') + (x.powod ? ' (' + x.powod + ')' : '')).join('; ');
+  /** Kolejne dni z tą samą pozycją i tym samym powodem w jednym wierszu („13–15 lis”). */
+  function scal(xs) {
+    const grupy = {}, out = [];
+    xs.forEach(x => { const k = x.co + '|' + x.powod + '|' + x.notatka; (grupy[k] = grupy[k] || []).push(x); });
+    Object.keys(grupy).forEach(k => {
+      let run = null;
+      grupy[k].sort((a, b) => a.data.localeCompare(b.data)).forEach(x => {
+        if (run && (x.data === run.do || x.data === L.plus(run.do, 1))) { run.do = x.data; if (run.pory.indexOf(x.pora) < 0) run.pory.push(x.pora); }
+        else { run = { od: x.data, do: x.data, pory: [x.pora], co: x.co, powod: x.powod, notatka: x.notatka, wielePor: x.wielePor }; out.push(run); }
+      });
+    });
+    return out.sort((a, b) => a.od.localeCompare(b.od));
+  }
+  const dniTxt = r => (r.od === r.do ? krotka(r.od) : (r.od.slice(0, 7) === r.do.slice(0, 7) ? +r.od.slice(8) : krotka(r.od)) + '–' + krotka(r.do));
+  /** Kalendarz: miesiące z numerami dni, wiersz na każdą pozycję. */
+  function kalendarzRaportu(r) {
+    // od pierwszego dnia, w którym coś z tej terapii było w planie (bez pustych miesięcy wcześniej)
+    const start = r.bloki.reduce((m, b) => b.wersjeStat.reduce((m2, v) => (v.od < m2 ? v.od : m2), m), r.koniec);
+    const pocz = start > r.od ? start : r.od;
+    let html = '';
+    for (let m = pocz.slice(0, 7); m <= r.koniec.slice(0, 7); m = plusMies(m, 1)) {
+      const z = zakresMies(m), od = z.od < pocz ? pocz : z.od, do_ = z.do > r.koniec ? r.koniec : z.do, dni = [];
+      for (let d = od; d <= do_; d = L.plus(d, 1)) dni.push(d);
+      html += `<div class="kal-wrap"><table class="kal"><caption>${MIESIACE[+m.slice(5) - 1]} ${m.slice(0, 4)}</caption>
+        <thead><tr><th></th>${dni.map(d => `<th${L.dzienTyg(d) === 6 ? ' class="nd"' : ''}>${+d.slice(8)}</th>`).join('')}</tr></thead>
+        <tbody>${r.bloki.map(b => { const mapa = {}; b.dni.forEach(x => { mapa[x.data] = x.st; }); return `<tr><th>${esc(nazwaBloku(b))}</th>${dni.map(d => `<td><i class="k-${mapa[d] || 'none'}"></i></td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+    }
+    return html;
+  }
   function viewRaport(S) {
     const t = S.dzis, ctx = Z.ctx(), D = Z.model();
     const terapie = (D.terapie || []).filter(x => ctx.pozycje.some(p => p.terapia === x.id));
@@ -172,7 +203,8 @@
     if (!R.terapia || !ctx.terapie[R.terapia]) R.terapia = terapie[0].id;
     const okresy = [['30', '30 dni'], ['90', '90 dni'], ['start', 'od początku terapii'], ['wlasny', 'własny']];
     const z = zakresRaportu(t);
-    const form = `<section class="card rep-form"><h2 class="rep-h">Raport dla lekarza</h2><p class="desc">Jedna strona na wizytę: jak regularnie brałeś, co pominąłeś i dlaczego, ile było użyć doraźnych.</p>
+    const form = `<section class="card rep-form"><h2 class="rep-h">Raport dla lekarza</h2><p class="desc">Jedna strona na wizytę: co i kiedy brałeś, czego nie wziąłeś i dlaczego.</p>
+      <label class="field"><span>Pacjent (na raporcie; zapamiętane tylko na tym urządzeniu)</span><input id="rPacjent" maxlength="60" autocomplete="name" value="${esc(Z.lsGet('pacjent') || '')}" placeholder="imię i nazwisko"></label>
       <h3 class="sh-h">Terapia</h3><div class="chips" role="group" aria-label="Terapia">${terapie.map(x => `<button type="button" data-r-ter="${esc(x.id)}" aria-pressed="${R.terapia === x.id}"><i class="dot" style="background:${esc(x.kolor || 'var(--muted)')}"></i>${esc(x.nazwa)}</button>`).join('')}</div>
       <h3 class="sh-h">Okres</h3><div class="chips" role="group" aria-label="Okres">${okresy.map(o => `<button type="button" data-r-okres="${o[0]}" aria-pressed="${R.okres === o[0]}">${o[1]}</button>`).join('')}</div>
       ${R.okres === 'wlasny' ? `<div class="two-col"><label class="field"><span>Od</span><input type="date" id="rOd" value="${esc(z.od)}" max="${t}"></label><label class="field"><span>Do</span><input type="date" id="rDo" value="${esc(z.do)}" max="${t}"></label></div>` : `<p class="hint-avg">${esc(L.dataPl(z.od, t))} – ${esc(L.dataPl(z.do, t))}</p>`}
@@ -182,32 +214,42 @@
     if (L.num(z.do) - L.num(z.od) > 400) return form + '<p class="err">Raport obejmuje najwyżej 400 dni. Skróć okres.</p>';
     const stare = starsze(z.od, z.do);
     if (stare === null) return form + (bladStarszych() ? `<p class="err">Nie udało się wczytać dziennika: ${esc(bladStarszych())} <button type="button" class="linkish" data-h-retry>Spróbuj ponownie</button></p>` : '<div class="card"><p class="desc">Wczytuję dziennik z tego okresu…</p></div>');
-    const r = L.raport(ctx, Z.wpisy(stare), R.terapia, z.od, z.do, t), ter = ctx.terapie[R.terapia];
-    const zmiany = r.zmiany.map(x => `<li><b>${esc(L.dataPl(x.data, t))}:</b> ${esc(x.typ === 'start' ? 'początek: ' + x.na.nazwa + ' (' + opisWersji(x.na) + ')' : x.typ === 'koniec' ? 'koniec: ' + x.na.nazwa : x.na.nazwa + ': ' + opisWersji(x.z) + ' → ' + opisWersji(x.na))}</li>`).join('');
-    const bloki = r.bloki.map(b => {
-      const p = b.wersje[b.wersje.length - 1];
-      const staty = b.plan ? `<p class="rb-stat"><b class="pct">${b.pct}%</b> regularności · wzięte ${b.wz} z ${b.plan}${b.pom ? ` · pominięte ${b.pom}` : ''}${b.brak ? ` · brak danych ${b.brak}` : ''}</p>` : '';
-      const kratki = b.plan || b.dor ? `<div class="kratki" aria-hidden="true">${b.dni.map(x => `<i class="k-${x.st}"></i>`).join('')}</div>` : '';
-      const braki = b.braki.length > 14 ? `${b.braki.length} podań, m.in. ${listaDat(b.braki.slice(-6), t)}` : listaDat(b.braki, t);
-      return `<section class="rb"><h3>${esc(p.nazwa)}</h3><p class="rb-sub">${esc(opisWersji(p))}${p.status === 'zakończona' && p.do ? ' · zakończone ' + esc(L.dataPl(p.do, t)) : ''}</p>${staty}${kratki}
-        ${b.pominiete.length ? `<p><b>Pominięte:</b> ${esc(listaDat(b.pominiete, t))}</p>` : ''}
-        ${b.braki.length ? `<p><b>Brak danych:</b> ${esc(braki)}</p>` : ''}
-        ${b.dor ? `<p><b>Doraźnie:</b> ${b.dor} ${b.dor === 1 ? 'raz' : 'razy'} (średnio ${String(b.dorNaTydz).replace('.', ',')} w tygodniu)</p>` : ''}
-        ${!b.plan && !b.dor ? '<p>W tym okresie bez podań.</p>' : ''}</section>`;
-    }).join('');
-    const notatki = r.notatki.length ? `<section class="rb"><h3>Notatki</h3><ul>${r.notatki.map(n => `<li><b>${esc(L.dataPl(n.data, t))}</b>, ${esc(n.p ? n.p.nazwa : '')}: ${esc(n.tekst)}</li>`).join('')}</ul></section>` : '';
+    const r = L.raport(ctx, Z.wpisy(stare), R.terapia, z.od, z.do, t), ter = ctx.terapie[R.terapia], pacjent = (Z.lsGet('pacjent') || '').trim();
+    let plan = 0, wz = 0;
+    r.bloki.forEach(b => { plan += b.plan; wz += b.wz; });
+    // co i kiedy: wiersz na każdą wersję (zmiana dawki = nowy wiersz)
+    const coKiedy = r.bloki.map(b => b.wersjeStat.map(v => `<tr><td><b>${esc(v.p.nazwa)}</b></td><td>${esc(jak(v.p))}</td>
+      <td class="num">${esc(krotka(v.od))} – ${v.do ? esc(krotka(v.do)) : 'nadal'}</td>
+      <td class="num">${v.plan ? `${v.wz} z ${v.plan} <b>(${Math.round(100 * v.wz / v.plan)}%)</b>` : '–'}</td></tr>`).join('')).join('');
+    // czego nie wziąłem
+    const braki = scal([].concat.apply([], r.bloki.map(b => {
+      const wiele = b.wersje.some(p => p.poryN.length > 1);
+      return b.pominiete.map(x => ({ data: x.data, pora: x.pora, co: nazwaBloku(b), powod: x.powod || 'pominięte', notatka: x.notatka || '', wielePor: wiele }))
+        .concat(b.braki.map(x => ({ data: x.data, pora: x.pora, co: nazwaBloku(b), powod: 'brak danych', notatka: '', wielePor: wiele })));
+    })));
+    r.bloki.forEach(b => b.brakiTyg.forEach(x => braki.push({ od: x.od, do: x.do, pory: [], co: nazwaBloku(b), powod: 'brak danych' + (x.n > 1 ? ' (' + x.n + '×)' : ''), notatka: '', tydz: true })));
+    braki.sort((a, b) => a.od.localeCompare(b.od));
+    const nieWziete = braki.length ? `<table class="rt"><thead><tr><th>Kiedy</th><th>Co</th><th>Dlaczego</th></tr></thead><tbody>${braki.map(x =>
+      `<tr><td class="num">${x.tydz ? 'tydzień ' : ''}${esc(dniTxt(x))}${x.wielePor ? ' <span class="pora">' + esc(x.pory.map(Z.nazwaPory).join(', ')) + '</span>' : ''}</td><td>${esc(x.co)}</td><td>${esc(x.powod)}${x.notatka ? ' – ' + esc(x.notatka) : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<p>Wszystko według planu.</p>';
+    // doraźne
+    const dor = r.bloki.filter(b => b.dor).map(b => `<p><b>${esc(nazwaBloku(b))}:</b> ${b.dor} ${b.dor === 1 ? 'raz' : 'razy'}, średnio ${String(b.dorNaTydz).replace('.', ',')} w tygodniu.</p>
+      <p class="rep-dor">${b.dorWpisy.map(w => esc(krotka(w.data) + (w.godz ? ' ' + w.godz : '') + (w.ilosc > 1 ? ' (' + Z.dawkaTxt(w.p || b.wersje[0], w.ilosc) + ')' : '') + (w.notatka ? ' – ' + w.notatka : ''))).join('; ')}</p>`).join('');
     const rep = `<article class="report" aria-label="Raport">
-      <header class="rep-head"><h2>Raport regularności: ${esc(ter.nazwa)}</h2>
-        ${[ter.lekarz, ter.specjalizacja].filter(Boolean).length ? `<p>${esc([ter.lekarz, ter.specjalizacja].filter(Boolean).join(', '))}</p>` : ''}
-        <p>Okres: ${esc(pelna(r.od))} – ${esc(pelna(r.koniec))} (${Z.dni(r.dniOkresu)}) · przygotowano ${esc(pelna(t))}</p></header>
-      ${zmiany ? `<section class="rb"><h3>Zmiany w okresie</h3><ul>${zmiany}</ul></section>` : ''}
-      ${bloki || '<p>W tym okresie nie było podań.</p>'}${notatki}
-      <p class="rep-leg"><span><i class="k-ok"></i>wzięte</span><span><i class="k-czesc"></i>część</span><span><i class="k-pom"></i>pominięte</span><span><i class="k-brak"></i>brak danych</span><span><i class="k-dor"></i>tylko doraźnie</span><span><i class="k-none"></i>nic w planie</span></p>
-      <p class="rep-foot">Regularność = wzięte ÷ zaplanowane podania. „Brak danych” to podania bez żadnej odpowiedzi albo z odpowiedzią „nie pamiętam”; nie są liczone jako pominięte. Dzisiejsze podania bez odpowiedzi nie są liczone.</p>
+      <header class="rep-head"><h2>Raport: ${esc(ter.nazwa)}</h2>
+        ${pacjent ? `<p>Pacjent: <b>${esc(pacjent)}</b></p>` : ''}
+        <p>Okres: ${esc(pelna(r.od))} – ${esc(pelna(r.koniec))} (${Z.dni(r.dniOkresu)})${plan ? ` · wzięte łącznie <b>${wz} z ${plan} (${Math.round(100 * wz / plan)}%)</b>` : ''}</p></header>
+      <section class="rs"><h3>Co i kiedy</h3>${coKiedy ? `<table class="rt"><thead><tr><th>Co</th><th>Jak</th><th>Kiedy</th><th>Wzięte</th></tr></thead><tbody>${coKiedy}</tbody></table>` : '<p>W tym okresie nic nie było w planie.</p>'}</section>
+      ${r.bloki.length ? `<section class="rs"><h3>Kalendarz</h3>${kalendarzRaportu(r)}
+        <p class="rep-leg"><span><i class="k-ok"></i>wzięte</span><span><i class="k-czesc"></i>część</span><span><i class="k-pom"></i>niewzięte</span><span><i class="k-brak"></i>brak danych</span><span><i class="k-dor"></i>doraźnie</span></p></section>` : ''}
+      <section class="rs"><h3>Czego nie wziąłem</h3>${nieWziete}</section>
+      ${dor ? `<section class="rs"><h3>Doraźnie</h3>${dor}</section>` : ''}
+      <p class="rep-foot">Przygotowano ${esc(pelna(t))} w aplikacji Zdrowie, z codziennych odhaczeń.</p>
     </article>
     <div class="dev-acts center rep-acts"><button type="button" class="btn-sm primary" data-print>Drukuj albo zapisz PDF</button></div>`;
     return form + rep;
   }
+  document.addEventListener('input', e => { if (e.target && e.target.id === 'rPacjent') Z.lsSet('pacjent', e.target.value.trim().slice(0, 60)); });
   Z.widoki.raport = viewRaport;
   Z.klik.push(e => {
     let b;

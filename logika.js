@@ -409,10 +409,14 @@ var Logika = (function () {
     const bloki = kolej.map(k => {
       const wersje = grupy[k].slice().sort((a, b) => String(a.od || '9').localeCompare(String(b.od || '9')));
       const ids = wersje.map(p => p.id);
-      const b = { wersje: wersje, plan: 0, wz: 0, pom: 0, brak: 0, pct: null, pominiete: [], braki: [], dni: [], dor: 0, tydz: null };
+      const b = { wersje: wersje, plan: 0, wz: 0, pom: 0, brak: 0, pct: null, pominiete: [], braki: [], dni: [], dor: 0, tydz: null, wersjeStat: [], dorWpisy: [], brakiTyg: [] };
       const naDzien = {};
       wersje.forEach(p => {
         if (p.status === 'planowana' || !p.od) return;
+        if (p.od > koniec || (p.do && p.do < od)) return;
+        // statystyka jednej wersji (tabela „co i kiedy”); blok sumuje wszystkie wersje
+        const vs = { p: p, od: p.od < od ? od : p.od, do: p.do && p.do < koniec ? p.do : null, plan: 0, wz: 0, pom: 0, brak: 0 };
+        b.wersjeStat.push(vs);
         if (p.h.typ === 'tydz') {
           // N razy w tygodniu: plan na tydzień, w niepełnych tygodniach proporcjonalnie; bieżący tydzień bez braków
           b.tydz = b.tydz || { plan: 0 };
@@ -420,7 +424,7 @@ var Logika = (function () {
             const a = [pon, od, p.od].sort().pop(), z = [plus(pon, 6), koniec, p.do || '9999'].sort()[0];
             if (a > z) continue;
             let wz = 0, pom = 0;
-            idx.lista.forEach(w => { if (w.pozycja === p.id && w.data >= a && w.data <= z) { if (w.status === 'wzięte') { wz++; naDzien[w.data] = 'ok'; } else if (w.status === 'pominięte') { pom++; if (!naDzien[w.data]) naDzien[w.data] = 'pom'; } } });
+            idx.lista.forEach(w => { if (w.pozycja === p.id && w.data >= a && w.data <= z) { if (w.status === 'wzięte') { wz++; naDzien[w.data] = 'ok'; } else if (w.status === 'pominięte') { pom++; b.pominiete.push({ data: w.data, pora: w.pora || '', powod: w.powod || '', notatka: w.notatka || '' }); if (!naDzien[w.data]) naDzien[w.data] = 'pom'; } } });
             const dniW = num(z) - num(a) + 1, pelny = plus(pon, 6) <= koniec && plus(pon, 6) < dzis;
             let pref = 0;
             for (let x = a; x <= z; x = plus(x, 1)) if (p.h.pref.indexOf(dzienTyg(x)) >= 0) pref++;
@@ -428,6 +432,8 @@ var Logika = (function () {
             if (!pelny) plan = Math.min(plan, wz + pom);
             plan = Math.max(plan, wz + pom);
             b.plan += plan; b.wz += wz; b.pom += pom; b.brak += Math.max(0, plan - wz - pom);
+            if (plan - wz - pom > 0) b.brakiTyg.push({ od: a, do: z, n: plan - wz - pom });
+            vs.plan += plan; vs.wz += wz; vs.pom += pom; vs.brak += Math.max(0, plan - wz - pom);
           }
           return;
         }
@@ -436,15 +442,16 @@ var Logika = (function () {
           poryPozycji(p).forEach(pora => {
             const w = idx.sloty[kluczSlotu(d, pora, p.id)], st = stanWpisu(w);
             if (d === dzis && st === 'do') return;
-            b.plan++;
+            b.plan++; vs.plan++;
             const stary = naDzien[d];
-            if (st === 'wziete') { b.wz++; naDzien[d] = !stary || stary === 'ok' ? 'ok' : stary === 'brak' ? 'czesc' : stary; }
-            else if (st === 'pominiete') { b.pom++; b.pominiete.push({ data: d, pora: pora, powod: w.powod || '', notatka: w.notatka || '' }); naDzien[d] = stary === 'brak' || stary === 'czesc' ? 'czesc' : 'pom'; }
-            else { b.brak++; b.braki.push({ data: d, pora: pora, niewiem: st === 'niewiem' }); naDzien[d] = !stary ? 'brak' : stary === 'brak' ? 'brak' : 'czesc'; }
+            if (st === 'wziete') { b.wz++; vs.wz++; naDzien[d] = !stary || stary === 'ok' ? 'ok' : stary === 'brak' ? 'czesc' : stary; }
+            else if (st === 'pominiete') { b.pom++; vs.pom++; b.pominiete.push({ data: d, pora: pora, powod: w.powod || '', notatka: w.notatka || '' }); naDzien[d] = stary === 'brak' || stary === 'czesc' ? 'czesc' : 'pom'; }
+            else { b.brak++; vs.brak++; b.braki.push({ data: d, pora: pora, niewiem: st === 'niewiem' }); naDzien[d] = !stary ? 'brak' : stary === 'brak' ? 'brak' : 'czesc'; }
           });
         });
       });
-      idx.dorazne.forEach(w => { if (ids.indexOf(w.pozycja) >= 0 && w.data >= od && w.data <= koniec) { b.dor++; if (!naDzien[w.data]) naDzien[w.data] = 'dor'; } });
+      idx.dorazne.forEach(w => { if (ids.indexOf(w.pozycja) >= 0 && w.data >= od && w.data <= koniec) { b.dor++; b.dorWpisy.push({ data: w.data, godz: w.godz || '', ilosc: w.ilosc, notatka: w.notatka || '', p: ctx.pozMap[w.pozycja] }); if (!naDzien[w.data]) naDzien[w.data] = 'dor'; } });
+      b.dorWpisy.sort((x, y) => (x.data + x.godz).localeCompare(y.data + y.godz));
       b.dni = dniOkresu.map(d => ({ data: d, st: naDzien[d] || 'none' }));
       b.pct = b.plan ? Math.round(100 * b.wz / b.plan) : null;
       b.dorNaTydz = dniOkresu.length ? Math.round(10 * b.dor * 7 / dniOkresu.length) / 10 : 0;

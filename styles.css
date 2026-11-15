@@ -417,6 +417,22 @@ button.danger[data-armed] { background: rgba(227,102,102,.15); border-color: var
 .rep-head { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
 .rep-head p { color: #444; }
 .rb { padding: 10px 0; border-bottom: 1px solid #ddd; break-inside: avoid; }
+.rs { padding: 10px 0 6px; break-inside: avoid; }
+.rs h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: #333; margin-bottom: 6px; }
+.rt { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rt th { text-align: left; font-weight: 600; color: #555; border-bottom: 1.5px solid #222; padding: 4px 6px 4px 0; }
+.rt td { border-bottom: 1px solid #e3e3e3; padding: 5px 6px 5px 0; vertical-align: top; color: #222; }
+.rt td.num { white-space: nowrap; }
+.rt .pora { color: #666; white-space: nowrap; }
+.kal-wrap { overflow-x: auto; margin-bottom: 8px; }
+.kal { border-collapse: separate; border-spacing: 2px; font-size: 10.5px; }
+.kal caption { text-align: left; font-weight: 700; font-size: 12px; color: #333; padding: 2px 0; }
+.kal th { font-weight: 600; color: #777; text-align: center; min-width: 13px; padding: 0; }
+.kal th.nd { color: #111; }
+.kal tbody th { text-align: left; color: #222; padding-right: 6px; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.kal td { padding: 0; }
+.kal td i { display: block; width: 13px; height: 13px; border-radius: 2px; }
+.rep-dor { color: #444 !important; font-size: 12.5px; }
 .rb-sub { color: #555 !important; }
 .rb-stat .pct { font-size: 17px; }
 .kratki { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0; }
@@ -433,7 +449,9 @@ button.danger[data-armed] { background: rgba(227,102,102,.15); border-color: var
   .report, .report * { visibility: visible; }
   .report { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; border-radius: 0; font-size: 11.5px; }
   .appbar, .tabbar, .sync, .toast { display: none !important; }
-  .kratki i, .rep-leg i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .kratki i, .rep-leg i, .kal td i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .kal-wrap { overflow: visible; }
+  .kal td i { width: 12px; height: 12px; }
 }
 
 /* =================== skórki =================== */
