@@ -1,0 +1,4 @@
+DaneStartowe.gs
+*.prywatne.*
+node_modules/
+zrzuty/
