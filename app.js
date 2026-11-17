@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.1.2';
+window.CLIENT_VERSION = '2.1.3';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -325,15 +325,19 @@ window.CLIENT_VERSION = '2.1.2';
     return `<div class="stock${z.alert ? ' low' : ''}">${pct === null ? '' : `<div class="track" aria-hidden="true"><span style="width:${pct}%"></span></div>`}
       <div class="stock-txt">${txt}</div><div class="acts"><button type="button" class="edit" data-fix="${esc(o.id)}">Popraw stan</button><button type="button" class="edit" data-finish="${esc(o.id)}">Skończyło się</button></div></div>`;
   }
+  /** Branie naprawdę skończone. Wersja z zaplanowaną zmianą dawki („2 tabl. do 25.11, potem 1”) do swojego „Do” zostaje na wierzchu. */
+  const koniecBrania = (p, dzis) => p.status === 'zakończona' && (!p.do || p.do < dzis);
   function pozycjaHtml(p, S, zap, dor) {
     const opis = [dawkaTxt(p), p.h.typ === 'brak' && p.dorazne ? 'tylko doraźnie' : L.opisHarmonogramu(p.h), p.poryN.map(nazwaPory).join(' i '), opisPrzyp(p)].filter(Boolean).join(' · ');
-    const badge = p.status === 'planowana' ? '<span class="badge plan">planowana</span>' : p.status !== 'aktywna' ? '<span class="badge end">zakończona</span>' : '';
-    const okres = p.status === 'aktywna' ? (p.od ? 'od ' + L.dataPl(p.od, S.dzis) : '') : [p.od ? L.dataPl(p.od, S.dzis) : '', p.do ? L.dataPl(p.do, S.dzis) : ''].filter(Boolean).join(' – ');
+    const konc = koniecBrania(p, S.dzis), teraz0 = p.status === 'aktywna' || (p.status === 'zakończona' && !konc);
+    const badge = p.status === 'planowana' ? '<span class="badge plan">planowana</span>' : konc ? '<span class="badge end">zakończona</span>'
+      : p.od && p.od > S.dzis ? `<span class="badge plan">od ${esc(L.dataPl(p.od, S.dzis))}</span>` : '';
+    const okres = teraz0 && !p.do ? (p.od ? 'od ' + L.dataPl(p.od, S.dzis) : '') : [p.od ? L.dataPl(p.od, S.dzis) : '', p.do ? L.dataPl(p.do, S.dzis) : ''].filter(Boolean).join(' – ');
     const d = dor[p.id], z = zap[p.id];
     const brakOpak = p.status === 'aktywna' && !z ? `<div class="acts"><button type="button" class="edit" data-add-pack="${esc(p.id)}">+ Opakowanie</button></div>` : '';
     return `<div class="pos"><div class="nm"><b>${ikona(p)}${esc(p.nazwa)}</b>${badge}${p.status !== 'zakończona' ? `<button type="button" class="edit pos-edit" data-edit-p="${esc(p.id)}">Edytuj</button>` : ''}</div>
-      ${p.status === 'zakończona' ? '' : `<p>${esc(opis)}</p>`}
-      ${p.warunki && p.status !== 'zakończona' ? `<p>${esc(p.warunki)}</p>` : ''}
+      ${konc ? '' : `<p>${esc(opis)}</p>`}
+      ${p.warunki && !konc ? `<p>${esc(p.warunki)}</p>` : ''}
       ${okres ? `<p class="note">${esc(okres)}</p>` : ''}
       ${d ? `<p>Doraźnie: dziś ${d.dzis.length}×, w tym tygodniu ${d.tydzien}×</p>` : ''}
       ${p.uwagi ? `<p class="note">${esc(p.uwagi)}</p>` : ''}
@@ -349,7 +353,7 @@ window.CLIENT_VERSION = '2.1.2';
     const nowa = `<div class="dev-acts center"><button type="button" class="btn-sm primary-sm" data-new-t>+ Nowa terapia</button></div>`;
     if (!grupy.length) return `<div class="empty"><b>Nie ma jeszcze terapii</b>Terapia to lekarz albo obszar leczenia, np. „Pulmonologia”. Do niej dodasz leki i zabiegi.${nowa}</div>`;
     return grupy.map(g => {
-      const t = g.t, akt = g.poz.filter(p => p.status !== 'zakończona'), zak = g.poz.filter(p => p.status === 'zakończona');
+      const t = g.t, akt = g.poz.filter(p => !koniecBrania(p, S.dzis)), zak = g.poz.filter(p => koniecBrania(p, S.dzis));
       const sub = [t.lekarz, t.specjalizacja, t.uwagi].filter(Boolean).join(' · '), key = 'zak-' + t.id;
       return `<section class="panel card" style="--tc:${t.kolor ? skinKolor(t.kolor) : 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj</button>` : ''}</div>
         ${sub ? `<p class="th-sub">${esc(sub)}</p>` : ''}
