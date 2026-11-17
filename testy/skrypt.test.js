@@ -38,7 +38,7 @@ test('dostęp: bez klucza i z błędnym kluczem nic; klucz → przepustka; parow
   assert.equal(env.post({ key: 'zly-klucz', fn: 'refreshData' }).auth, true);
   const call = env.polacz('Telefon');
   const m = call('refreshData');
-  assert.equal(m.version, '2.0'); assert.equal(m.dzis, DZIS);
+  assert.equal(m.version, '2.1'); assert.equal(m.dzis, DZIS);
   assert.equal(m.devices.list.length, 1); assert.ok(m.devices.list[0].current);
   assert.ok(!JSON.stringify(m).includes(env.props.API_KEY));
   const kod = call('pairStart').code;

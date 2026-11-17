@@ -295,3 +295,18 @@ test('raport: brak w tygodniu dla pozycji „raz w tygodniu” trafia do braków
   assert.deepEqual(r.bloki[0].brakiTyg, [{ od: d(-14), do: d(-14), n: 1 }]);
   assert.deepEqual(r.bloki[0].pominiete.map(x => x.powod), ['brak czasu']);
 });
+
+test('zapas: zmiana dawki zaplanowana na później liczy się od swojego dnia', () => {
+  const m = { pory: [{ nazwa: 'rano', kolejnosc: 1 }, { nazwa: 'wieczór', kolejnosc: 2 }], terapie: [{ id: 'T1', nazwa: 'T' }],
+    pozycje: [
+      { id: 'A1', terapia: 'T1', nazwa: 'Lek', rodzaj: 'lek', dawka: 2, jednostka: 'tabletka', harmonogram: 'codziennie', pory: 'rano+wieczór', od: '2026-03-01', do: '2026-03-05', status: 'zakończona' },
+      { id: 'A2', terapia: 'T1', nazwa: 'Lek', rodzaj: 'lek', dawka: 1, jednostka: 'tabletka', harmonogram: 'codziennie', pory: 'rano+wieczór', od: '2026-03-06', status: 'aktywna', poprzednia: 'A1' }],
+    opakowania: [{ id: 'O1', pozycja: 'A2', otwarto: '2026-03-01', ilosc: 30, alertDni: 3 }], dziennik: { od: '2026-02-01', wpisy: [] } };
+  const ctx = L.przygotuj(m);
+  assert.deepStrictEqual(L.dzien(ctx, L.indeks([]), '2026-03-02').map(k => k.pozycje.map(x => x.p.id + '×' + x.p.dawkaN).join()), ['A1×2', 'A1×2']);
+  assert.deepStrictEqual(L.dzien(ctx, L.indeks([]), '2026-03-06').map(k => k.pozycje.map(x => x.p.id + '×' + x.p.dawkaN).join()), ['A2×1', 'A2×1']);
+  // 1.03 rano: 30 tabletek; 1–5.03 po 4 = 20, zostaje 10; od 6.03 po 2 dziennie = 5 dni, koniec 10.03
+  const z = L.zapasy(ctx, L.indeks([]), '2026-03-01').filter(x => x.p.id === 'A2')[0];
+  assert.strictEqual(z.zostalo, 30);
+  assert.strictEqual(z.koniec, '2026-03-10');
+});

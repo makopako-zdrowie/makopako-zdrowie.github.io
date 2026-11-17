@@ -312,7 +312,8 @@ var Logika = (function () {
         r.zostalo = Math.round(((st.kor !== null ? st.kor : r.razem) - st.zuz) * 1000) / 1000;
         let z = r.zostalo, d = dzis, ost = null, bylo = false, i = 0;
         for (; i < 800; i++) {
-          const n = potrzeba(p, idx, d, dzis);
+          // cała rodzina wersji: zmiana dawki zaplanowana na później liczy się od swojego dnia (np. 2 tabl. do 25.11, potem 1)
+          const n = (ctx.rodzina[p.id] || [p.id]).reduce((a, id) => a + (ctx.pozMap[id] ? potrzeba(ctx.pozMap[id], idx, d, dzis) : 0), 0);
           if (n > 0) { bylo = true; if (z - n < -1e-9) break; z -= n; }
           ost = d; d = plus(d, 1);
         }

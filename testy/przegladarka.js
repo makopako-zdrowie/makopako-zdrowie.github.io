@@ -72,7 +72,8 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.waitForSelector('.setup');
     await s.zrzut('01-laczenie'); await s.uklad('łączenie');
     await polacz(s);
-    ok((await page.textContent('.m-big')).trim() === '5 z 5' && /Zostało do odhaczenia/.test(await page.textContent('.month')), 'licznik na górze: ' + await page.textContent('.month'));
+    const RAZEM = +((await page.textContent('.m-big')).trim().split(' z ')[1]);       // 5 w niedzielę (peeling), 4 w inne dni
+    ok((await page.textContent('.m-big')).trim() === RAZEM + ' z ' + RAZEM && RAZEM >= 4 && /Zostało do odhaczenia/.test(await page.textContent('.month')), 'licznik na górze: ' + await page.textContent('.month'));
     ok((await page.textContent('#abSub')).includes(L.dataPl(dzis)), 'podtytuł z dzisiejszą datą');
     ok(await page.isVisible('.late'), 'karta „Wziąłeś?” jest');
     await s.zrzut('02-dzis'); await s.uklad('Dziś');
@@ -85,7 +86,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(s.wiersze().length === przed + 1, 'wpis w Dzienniku');
     const w = s.wiersze().slice(-1)[0];
     ok(w['Status'] === 'wzięte' && w['Data'] === dzis && w['Pora'] === 'rano' && w['Pozycja'] === 'P1' && w['Ilość'] === 1 && /^\d\d:\d\d$/.test(w['Godzina']) && w['Urządzenie'] === 'Telefon testowy', 'treść wpisu: ' + JSON.stringify(w));
-    ok((await page.textContent('.m-big')).trim() === '4 z 5', 'licznik po odhaczeniu');
+    ok((await page.textContent('.m-big')).trim() === (RAZEM - 1) + ' z ' + RAZEM, 'licznik po odhaczeniu');
     await page.waitForSelector('[data-pora="rano"] details.odh .item.st-wziete', { state: 'attached', timeout: 5000 });
     ok(!(await page.$('[data-pora="rano"] > .items .item.st-wziete')) && /Odhaczone \(1\)/.test(await page.textContent('[data-pora="rano"] details.odh summary')), 'odhaczone chowa się pod „Odhaczone (1)”');
     await page.click('[data-toast-undo]');
@@ -98,7 +99,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.waitForSelector('details.pora.done');
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     ok(s.wiersze().filter(x => x['Data'] === dzis && x['Stan'] === '' && x['Status'] === 'wzięte' && x['Pora'] === 'rano').length === 2, 'cała pora: 2 wpisy');
-    ok((await page.textContent('.m-big')).trim() === '3 z 5', 'licznik po całej porze');
+    ok((await page.textContent('.m-big')).trim() === (RAZEM - 2) + ' z ' + RAZEM, 'licznik po całej porze');
 
     // okno pozycji: inna ilość i notatka
     await page.click('.pora:not(.done) .item:nth-child(2) .it-more');
