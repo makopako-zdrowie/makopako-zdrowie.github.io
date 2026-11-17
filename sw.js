@@ -1,6 +1,6 @@
 /* Service worker: aplikacja otwiera się nawet bez internetu (z ostatnimi danymi zapisanymi w przeglądarce).
    Strona i ikony: najpierw sieć, a gdy jej nie ma – kopia z pamięci. Zapytania do arkusza (script.google.com) nie są tu obsługiwane. */
-const CACHE = 'zdrowie-v2-1-3';   // podbij przy każdej wersji strony (ta sama co CLIENT_VERSION w app.js)
+const CACHE = 'zdrowie-v2-1-4';   // podbij przy każdej wersji strony (ta sama co CLIENT_VERSION w app.js)
 const SHELL = ['./', './index.html', './fonts.css', './styles.css', './skin-neon.css', './skin-synthwave.css', './skin-racer.css', './config.js', './skin.js', './rdzen.js', './logika.js', './app.js', './moduly.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/favicon-32.png', './icons/apple-touch-icon.png'];
 

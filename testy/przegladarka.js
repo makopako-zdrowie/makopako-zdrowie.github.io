@@ -87,16 +87,17 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     const w = s.wiersze().slice(-1)[0];
     ok(w['Status'] === 'wzięte' && w['Data'] === dzis && w['Pora'] === 'rano' && w['Pozycja'] === 'P1' && w['Ilość'] === 1 && /^\d\d:\d\d$/.test(w['Godzina']) && w['Urządzenie'] === 'Telefon testowy', 'treść wpisu: ' + JSON.stringify(w));
     ok((await page.textContent('.m-big')).trim() === (RAZEM - 1) + ' z ' + RAZEM, 'licznik po odhaczeniu');
-    await page.waitForSelector('[data-pora="rano"] details.odh .item.st-wziete', { state: 'attached', timeout: 5000 });
-    ok(!(await page.$('[data-pora="rano"] > .items .item.st-wziete')) && /Odhaczone \(1\)/.test(await page.textContent('[data-pora="rano"] details.odh summary')), 'odhaczone chowa się pod „Odhaczone (1)”');
+    await page.waitForSelector('.done-today .item.st-wziete', { state: 'attached', timeout: 5000 });
+    ok(!(await page.$('[data-pora="rano"] .item.st-wziete')) && (await page.textContent('.done-today summary .cnt')).trim() === '1' && !(await page.getAttribute('.done-today', 'open')), 'odhaczone znika z pory i trafia do zwiniętego „Dziś odhaczone (1)”');
     await page.click('[data-toast-undo]');
-    await page.waitForFunction(() => !document.querySelector('.pora .item:first-child').classList.contains('st-wziete'));
+    await page.waitForFunction(() => !document.querySelector('.done-today') && document.querySelectorAll('[data-pora="rano"] .item.st-do').length === 2);
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     ok(s.wiersze().slice(-1)[0]['Stan'] === 'cofnięty', 'cofnięcie w arkuszu');
 
     // cała pora naraz
     await page.click('[data-all="rano"]');
-    await page.waitForSelector('details.pora.done');
+    await page.waitForFunction(() => !document.querySelector('[data-pora="rano"]') && document.querySelector('.done-today'));
+    ok(true, 'pora z kompletem znika z ekranu Dziś');
     await page.waitForFunction(() => (JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing')));
     ok(s.wiersze().filter(x => x['Data'] === dzis && x['Stan'] === '' && x['Status'] === 'wzięte' && x['Pora'] === 'rano').length === 2, 'cała pora: 2 wpisy');
     ok((await page.textContent('.m-big')).trim() === (RAZEM - 2) + ' z ' + RAZEM, 'licznik po całej porze');
@@ -119,8 +120,8 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok(s.wiersze().slice(-1)[0]['Status'] === 'pominięte' && s.wiersze().slice(-1)[0]['Powód'] === 'brak leku', 'pominięcie z powodem');
     // odhaczone → okno ze szczegółami, cofnięcie drugim dotknięciem
     await page.waitForTimeout(800);
-    await page.click('details.pora.done[data-key="pora-wieczór"] summary');
-    await page.click('details.pora.done[data-key="pora-wieczór"] .item.st-pominiete .it-main');
+    await page.click('.done-today summary');
+    await page.click('.done-today .item.st-pominiete .it-main');
     await page.waitForSelector('#sheet.open [data-sh-undo]');
     await page.click('[data-sh-undo]');
     ok((await page.textContent('[data-sh-undo]')).includes('Na pewno'), 'cofnięcie wymaga drugiego dotknięcia');
@@ -169,7 +170,6 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
 
     // bez internetu: odhaczenie widać od razu, wysyła się po powrocie sieci, bez duplikatów
     await page.waitForTimeout(800);
-    await page.click('details.pora.done[data-key="pora-wieczór"] .item:first-child .it-main').catch(() => {});
     if (await page.isVisible('#sheet.open')) await page.click('#sheetClose');
     s.siec(false); await s.ctx.setOffline(true);
     const n0 = s.wiersze().length;
@@ -265,15 +265,18 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok((await page.locator('.week7 .d7').count()) === 7, '7 kratek');
     ok((await page.locator('.item .ic svg').count()) > 0, 'ikonki pozycji');
     // ↶ przy odhaczonej pozycji: dwa dotknięcia cofają
+    const slotU = await page.getAttribute('.pora .item:first-child .it-main', 'data-take');
+    const undoSel = `.item:has([data-take="${slotU}"]) .it-more.undo`;
     await page.click('.pora .item:first-child .it-main');
-    await page.waitForSelector('.pora .item:first-child .it-more.undo');
+    await page.waitForSelector(undoSel);
     ok(await page.isVisible('.pora .item:first-child.just'), 'animacja świeżego odhaczenia');
-    await czysto();
-    await page.click('.pora .item:first-child .it-more.undo');
-    ok((await page.textContent('.pora .item:first-child .it-more.undo')).includes('Cofnąć?'), '↶ pyta o potwierdzenie');
+    await czysto(); await page.waitForTimeout(2800);
+    await page.evaluate(() => { const d = document.querySelector('.done-today'); if (d) d.open = true; });
+    await page.click(undoSel);
+    ok((await page.textContent(undoSel)).includes('Cofnąć?'), '↶ pyta o potwierdzenie');
     await s.zrzut('20-cofnij');
-    await page.click('.pora .item:first-child .it-more.undo');
-    await page.waitForFunction(() => !document.querySelector('.pora .item:first-child .it-more.undo'));
+    await page.click(undoSel);
+    await page.waitForFunction(sel => !document.querySelector(sel), undoSel);
     await czysto();
     ok(s.wiersze().slice(-1)[0]['Stan'] === 'cofnięty', '↶ cofnął wpis w arkuszu');
 
@@ -401,7 +404,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     }
     // linki z przypomnienia i skróty
     await page.goto(base + '?pora=wiecz%C3%B3r&d=' + dzis);
-    await page.waitForSelector('.card.pora.flash[data-pora="wieczór"]');
+    await page.waitForSelector('.card.pora.flash[data-pora="wieczór"], .done-today.flash[open]');
     ok(page.url() === base, 'link z przypomnienia: karta wieczoru, adres wyczyszczony');
     await page.goto(base + '?akcja=dorazne');
     await page.waitForSelector('#sheet.open [data-sh-adhoc]');

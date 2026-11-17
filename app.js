@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.1.3';
+window.CLIENT_VERSION = '2.1.4';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -208,18 +208,15 @@ window.CLIENT_VERSION = '2.1.3';
         <span class="it-txt"><b>${ikona(p)}${esc(p.nazwa)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${opis ? `<em>${esc(opis)}</em>` : ''}</span>
       </button>${przyciskBoczny(x, s, p.nazwa)}</li>`;
   }
+  /** Świeżo odhaczone zostaje chwilę na miejscu (animacja, „↶”), potem przechodzi do paska „Dziś odhaczone”. */
+  const swiezo = (data, pora, id) => swieze[L.kluczSlotu(data, pora, id)] > Date.now() - 2500;
+  /** Karta pory: tylko to, czego jeszcze nie odhaczono. Pora z kompletem znika z ekranu (jest w „Dziś odhaczone”). */
   function kartaPory(k, S) {
-    const razem = k.pozycje.length, zrobione = razem - k.doZrobienia, id = 'pora-' + k.klucz;
+    const razem = k.pozycje.length, zrobione = razem - k.doZrobienia;
     const fl = blysk.pora === k.klucz && blysk.do > Date.now() ? ' flash' : '';
-    const lista = `<ul class="items">${k.pozycje.map(x => wiersz(x, S.dzis)).join('')}</ul>`;
-    // odhaczone (np. D3 wzięta już przy obiedzie) nie wiszą na liście do zrobienia: chowają się pod „Odhaczone”; świeżo odhaczone zostają chwilę dla animacji
-    const swiezo = x => swieze[L.kluczSlotu(S.dzis, x.pora, x.p.id)] > Date.now() - 2500;
-    const doZrob = k.pozycje.filter(x => x.stan === 'do' || swiezo(x)), odh = k.pozycje.filter(x => doZrob.indexOf(x) < 0), kOdh = id + '-odh';
-    const listaDo = `<ul class="items">${doZrob.map(x => wiersz(x, S.dzis)).join('')}</ul>`
-      + (odh.length ? `<details class="more odh" data-key="${esc(kOdh)}"${opened[kOdh] ? ' open' : ''}><summary>Odhaczone (${odh.length})</summary><ul class="items">${odh.map(x => wiersz(x, S.dzis)).join('')}</ul></details>` : '');
-    if (!k.doZrobienia) {
-      return `<details class="panel card pora done${fl}" data-key="${esc(id)}" data-pora="${esc(k.klucz)}"${opened[id] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>${esc(cap(k.nazwa))}</h2><span class="cnt">odhaczone</span></summary>${lista}</details>`;
-    }
+    const doZrob = k.pozycje.filter(x => x.stan === 'do' || swiezo(S.dzis, x.pora, x.p.id));
+    if (!doZrob.length) return '';
+    const listaDo = `<ul class="items">${doZrob.map(x => wiersz(x, S.dzis)).join('')}</ul>`;
     return `<section class="panel card pora${fl}" data-pora="${esc(k.klucz)}"><header class="card-head"><h2>${esc(cap(k.nazwa))}</h2>${k.godzina ? `<span class="when num">${esc(k.godzina)}</span>` : ''}<span class="cnt num">${zrobione} z ${razem}</span></header>
       ${listaDo}${k.doZrobienia >= 2 ? `<button type="button" class="pay-btn ghost all" data-all="${esc(k.klucz)}">Cała pora wzięta</button>` : ''}</section>`;
   }
@@ -241,9 +238,26 @@ window.CLIENT_VERSION = '2.1.3';
     return `<section class="panel card late sub-ask" aria-labelledby="h-late"><header class="card-head"><h2 id="h-late">Wziąłeś?</h2></header>
       <p class="desc">Te podania zostały bez odpowiedzi. Bez niej w raporcie będzie „brak danych”.</p>${wczoraj.map(grupa).join('')}${reszta}</section>`;
   }
+  /** Jeden zwinięty pasek ze wszystkim, co dziś odhaczone (według pór); rozwinięty pozwala podejrzeć i cofnąć. */
+  function kartaOdhaczone(S) {
+    const grupy = [];
+    S.karty.forEach(k => {
+      const xs = k.pozycje.filter(x => x.stan !== 'do' && !swiezo(S.dzis, x.pora, x.p.id));
+      if (xs.length) grupy.push({ nazwa: k.nazwa, godzina: k.godzina, xs: xs });
+    });
+    const tyg = S.tydzien.filter(t => t.wpisDzis && !swiezo(S.dzis, t.pora, t.p.id)).map(t => ({ p: t.p, pora: t.pora, wpis: t.wpisDzis, stan: L.stanWpisu(t.wpisDzis) }));
+    if (tyg.length) grupy.push({ nazwa: 'w tym tygodniu', godzina: '', xs: tyg });
+    const n = grupy.reduce((a, g) => a + g.xs.length, 0);
+    if (!n) return '';
+    const fl = blysk.pora === 'odhaczone' && blysk.do > Date.now() ? ' flash' : '';
+    return `<details class="panel card done done-today${fl}" data-key="odhaczone-dzis"${opened['odhaczone-dzis'] ? ' open' : ''}><summary><span class="okmark">${CHECK}</span><h2>Dziś odhaczone</h2><span class="cnt num">${n}</span></summary>
+      ${grupy.map(g => `<h3 class="sh-h">${esc(cap(g.nazwa))}${g.godzina ? ` <span class="muted num">${esc(g.godzina)}</span>` : ''}</h3><ul class="items">${g.xs.map(x => wiersz(x, S.dzis)).join('')}</ul>`).join('')}</details>`;
+  }
   function kartaTydzien(S) {
-    if (!S.tydzien.length) return '';
-    const wiersze = S.tydzien.map(t => {
+    // na wierzchu tylko to, co w tym tygodniu jeszcze do zrobienia; zrobione dziś jest w „Dziś odhaczone”
+    const lista = S.tydzien.filter(t => (!t.wpisDzis && t.zostalo > 0) || (t.wpisDzis && swiezo(S.dzis, t.pora, t.p.id)));
+    if (!lista.length) return '';
+    const wiersze = lista.map(t => {
       const p = t.p, gotowe = t.zostalo === 0;
       let info = `${t.wziete} z ${t.n} w tym tygodniu`;
       if (t.pominiete) info += `, pominięte ${t.pominiete}`;
@@ -302,7 +316,7 @@ window.CLIENT_VERSION = '2.1.3';
     const zrob = razem - zostalo, pct = razem ? (100 * zrob / razem).toFixed(2) : 0;
     const meter = razem ? `<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${razem}" aria-valuenow="${zrob}" aria-label="Odhaczone dziś: ${zrob} z ${razem}">${zrob ? `<span class="lf" style="flex:0 1 ${pct}%"></span>` : ''}${zostalo ? `<span class="rs" style="flex:1 1 ${(100 - pct).toFixed(2)}%"></span>` : ''}</div>` : '';
     const big = !razem ? '' : !zostalo ? `<p class="m-label">Na dziś wszystko odhaczone</p><p class="m-big num done">${razem} z ${razem}</p>` : `<p class="m-label">Zostało do odhaczenia</p><p class="m-big num">${zostalo} z ${razem}</p>`;
-    return alerty(S) + `<section class="month hero-d" aria-labelledby="h-dzis"><div class="m-head"><h1 id="h-dzis">Dziś</h1><span>${esc(glowa)}</span></div>${big}${meter}${pasekTygodnia(S)}</section>` + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
+    return alerty(S) + `<section class="month hero-d" aria-labelledby="h-dzis"><div class="m-head"><h1 id="h-dzis">Dziś</h1><span>${esc(glowa)}</span></div>${big}${meter}${pasekTygodnia(S)}</section>` + kartaOdhaczone(S) + kartaZalegle(S) + S.karty.map(k => kartaPory(k, S)).join('') + kartaTydzien(S) + kartaDorazne(S) + kartaPlanowane();
   }
 
   /* ================= ekran Terapie ================= */
@@ -775,9 +789,13 @@ window.CLIENT_VERSION = '2.1.3';
     if (!pora) return;
     if (d < dzis() && Z.pokazDzien) { Z.pokazDzien(d); idz('historia'); return; }
     blysk = { pora: pora, do: Date.now() + 1600 };
-    opened['pora-' + pora] = true;
     idz('dzis');
-    const karta = document.querySelector(`.card.pora[data-pora="${CSS.escape(pora)}"]`);
+    let karta = document.querySelector(`.card.pora[data-pora="${CSS.escape(pora)}"]`);
+    if (!karta && document.querySelector('.done-today')) {            // ta pora już odhaczona: pokazujemy pasek „Dziś odhaczone”
+      blysk = { pora: 'odhaczone', do: Date.now() + 1600 };
+      opened['odhaczone-dzis'] = true; render();
+      karta = document.querySelector('.done-today');
+    }
     if (karta) karta.scrollIntoView({ block: 'start' });
   }
 

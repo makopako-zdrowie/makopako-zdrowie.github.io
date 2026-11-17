@@ -98,8 +98,9 @@ body.booting .tabbar, body.setup .tabbar, body.setup .ab-act { display: none !im
 .meter .lf { background: var(--accent); }
 .meter .rs { background: repeating-linear-gradient(135deg, rgba(47,191,147,.4) 0 5px, rgba(47,191,147,.14) 5px 10px); }
 .hero-d .week7 { margin: 0; }
-details.more.odh { margin-top: 8px; }
-details.more.odh .items { margin-bottom: 4px; }
+.done-today .sh-h { margin: 14px 2px 8px; }
+.done-today[open] > summary { margin-bottom: 0; }
+.done-today .items + .sh-h { margin-top: 16px; }
 @media (min-width: 900px) { .month { padding: 10px 2px 6px; } }
 
 /* ---------- alerty ---------- */
@@ -332,7 +333,7 @@ button.danger[data-armed] { background: rgba(227,102,102,.15); border-color: var
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; max-width: 1500px; margin: 0 auto; padding: 0 22px; }
   .layout .wrap { max-width: none; padding-left: 0; padding-right: 0; margin: 0; width: 100%;
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 22px; align-content: start; align-items: start; }
-  .layout .wrap > :is(.alerts, .month, .late, .seg, .filtr, .empty, .boot, .setup, .rep-form, .report, .rep-acts, .dev-acts, p, div:not(.panel):not(.card)) { grid-column: 1 / -1; }
+  .layout .wrap > :is(.alerts, .month, .late, .done-today, .seg, .filtr, .empty, .boot, .setup, .rep-form, .report, .rep-acts, .dev-acts, p, div:not(.panel):not(.card)) { grid-column: 1 / -1; }
   .side { display: block; position: sticky; top: 57px; height: calc(100vh - 57px); overflow-y: auto; padding: 20px 0 40px; scrollbar-width: thin; }
   .side .panel { min-height: calc(100vh - 60px); margin-top: 0; }
   .ab-in { max-width: 1500px; padding: 8px 22px; }
