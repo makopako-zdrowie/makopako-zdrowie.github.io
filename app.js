@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.1.4';
+window.CLIENT_VERSION = '2.1.6';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
