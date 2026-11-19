@@ -421,6 +421,11 @@ body.setup .side, body.booting .side { display: none !important; }
 
 /* terapie: edycja */
 .th-head .edit { margin-left: auto; }
+/* terapie zwinięte (2.2.1): nagłówek to summary, lekarz i „Edytuj terapię” po rozwinięciu */
+details.ther > summary .badge { flex: none; }
+.th-top { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 6px; }
+.th-top .th-sub { flex: 1; margin: 0 2px 0 24px; }
+.th-top .edit { margin-left: auto; flex: none; }
 .pos .nm .pos-edit { margin-left: auto; }
 .th-add { padding: 10px 2px 2px; border-top: 1px solid var(--line); }
 .stock .acts { display: flex; gap: 18px; }

@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.2';
+window.CLIENT_VERSION = '2.2.1';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -373,12 +373,14 @@ window.CLIENT_VERSION = '2.2';
     if (!grupy.length) return `<div class="empty"><b>Nie ma jeszcze terapii</b>Terapia to lekarz albo obszar leczenia, np. „Pulmonologia”. Do niej dodasz leki i zabiegi.${nowa}</div>`;
     return grupy.map(g => {
       const t = g.t, akt = g.poz.filter(p => !koniecBrania(p, S.dzis)), zak = g.poz.filter(p => koniecBrania(p, S.dzis));
-      const sub = [t.lekarz, t.specjalizacja, t.uwagi].filter(Boolean).join(' · '), key = 'zak-' + t.id;
-      return `<section class="panel card" style="--tc:${t.kolor ? skinKolor(t.kolor) : 'var(--muted)'}"><div class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj</button>` : ''}</div>
-        ${sub ? `<p class="th-sub">${esc(sub)}</p>` : ''}
+      const sub = [t.lekarz, t.specjalizacja, t.uwagi].filter(Boolean).join(' · '), key = 'zak-' + t.id, tkey = 'ter-' + (t.id || 'bez');
+      // zwinięta terapia: nazwa, liczba pozycji i „kończy się”, gdy któremuś opakowaniu zapala się alert
+      const malo = akt.some(p => zap[p.id] && zap[p.id].alert);
+      return `<details class="panel card ther" data-key="${esc(tkey)}"${opened[tkey] ? ' open' : ''} style="--tc:${t.kolor ? skinKolor(t.kolor) : 'var(--muted)'}"><summary class="th-head"><i aria-hidden="true"></i><h2>${esc(t.nazwa)}</h2>${malo ? '<span class="badge plan">kończy się</span>' : ''}<span class="cnt num">${akt.length}</span></summary>
+        ${sub || t.id ? `<div class="th-top">${sub ? `<p class="th-sub">${esc(sub)}</p>` : ''}${t.id ? `<button type="button" class="edit" data-edit-t="${esc(t.id)}">Edytuj terapię</button>` : ''}</div>` : ''}
         ${akt.map(p => pozycjaHtml(p, S, zap, dor)).join('') || '<div class="pos"><p>Brak aktywnych pozycji.</p></div>'}
         ${t.id ? `<div class="th-add"><button type="button" class="btn-sm" data-new-p="${esc(t.id)}">+ Lek, suplement albo zabieg</button></div>` : ''}
-        ${zak.length ? `<details class="more" data-key="${esc(key)}"${opened[key] ? ' open' : ''}><summary>Zakończone (${zak.length})</summary>${zak.map(p => pozycjaHtml(p, S, zap, dor)).join('')}</details>` : ''}</section>`;
+        ${zak.length ? `<details class="more" data-key="${esc(key)}"${opened[key] ? ' open' : ''}><summary>Zakończone (${zak.length})</summary>${zak.map(p => pozycjaHtml(p, S, zap, dor)).join('')}</details>` : ''}</details>`;
     }).join('') + nowa;
   }
 

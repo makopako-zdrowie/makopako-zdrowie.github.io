@@ -212,6 +212,14 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     // Terapie
     await page.click('#tabbar [data-tab="terapie"]');
     await page.waitForSelector('.th-head');
+    // v2.2.1: terapie zwinięte; nagłówek z liczbą pozycji, rozwinięcie pokazuje pozycje i zapasy
+    ok(await page.$$eval('details.ther', ds => ds.length > 1 && ds.every(d => !d.open)), 'terapie domyślnie zwinięte');
+    ok(await page.isHidden('.stock [data-finish="O2"]'), 'zapas schowany w zwiniętej terapii');
+    ok(await page.$$eval('details.ther > summary .cnt', cs => cs.every(c => /^\d+$/.test(c.textContent.trim()))), 'liczba pozycji w nagłówku');
+    for (const sm of await page.$$('details.ther > summary')) await sm.click();
+    ok(await page.$$eval('details.ther', ds => ds.every(d => d.open)), 'terapie rozwinięte kliknięciem');
+    await page.click('#tabbar [data-tab="dzis"]'); await page.click('#tabbar [data-tab="terapie"]');
+    ok(await page.$$eval('details.ther', ds => ds.every(d => d.open)), 'rozwinięcie pamiętane między zakładkami');
     const tt = await page.textContent('#app');
     ok(tt.includes('Kardiologia') && tt.includes('dr Przykładowa') && tt.includes('Zakończone (1)'), 'terapie na ekranie');
     ok(/Zostało \d+ z 60 wdechów · wystarczy do \d+ \S+ · ważne do/.test(tt), 'zapas ze znaną ilością: ' + (tt.match(/Zostało[^S]*/) || [''])[0]);
@@ -370,6 +378,8 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     ok((await page.textContent('#fErr')).includes('Podaj nazwę'), 'formularz: brak nazwy');
     await page.click('#sheetClose'); await page.waitForFunction(() => !document.querySelector('#sheet.open'));
     // zmiana dawki Testolku od jutra = nowa wersja
+    const rozwin = sel => page.$eval(sel, el => { const d = el.closest('details.ther'); if (d && !d.open) d.open = true; });
+    await rozwin('[data-edit-p="P1"]');
     await page.click('[data-edit-p="P1"]'); await page.waitForSelector('#fDawka');
     ok(await page.isHidden('#fOdBox'), 'bez zmiany planu nie pyta „od kiedy”');
     await page.fill('#fDawka', '2');
@@ -380,6 +390,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     const poz = s.env.wiersze('Pozycje');
     ok(poz[0]['Status'] === 'zakończona' && poz[0]['Do'] === dzis && poz.slice(-1)[0]['Poprzednia'] === 'P1' && poz.slice(-1)[0]['Od'] === L.plus(dzis, 1), 'nowa wersja pozycji od jutra');
     // korekta zapasu
+    await rozwin('.stock [data-fix="O1"]');
     await page.click('.stock [data-fix="O1"]');
     await page.waitForSelector('[data-sh-fix]');
     await page.fill('#shQty', '30');

@@ -401,7 +401,7 @@
       if ((b = e.target.closest('[data-f-save-t]'))) {
         const arg = { id: c.t.id || null, nazwa: $('fTNazwa').value, lekarz: $('fTLek').value, specjalizacja: $('fTSpec').value, uwagi: $('fTUw').value, kolor: c.kolor };
         if (!arg.nazwa.trim()) { $('fErr').textContent = 'Podaj nazwę terapii.'; return true; }
-        Z.wyslij('saveTherapy', arg, b, null, $('fErr')).then(r => { if (r) { Z.zamknij(); Z.toast(c.t.id ? 'Zapisane.' : 'Terapia dodana. Teraz dodaj do niej leki albo zabiegi.'); } });
+        Z.wyslij('saveTherapy', arg, b, null, $('fErr')).then(r => { if (r) { if (!c.t.id && r.id) { Z.opened['ter-' + r.id] = true; Z.render(); } Z.zamknij(); Z.toast(c.t.id ? 'Zapisane.' : 'Terapia dodana. Teraz dodaj do niej leki albo zabiegi.'); } });
         return true;
       }
       return false;
