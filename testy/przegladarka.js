@@ -31,8 +31,10 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     const klucz = env.api.utworzKlucz();
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, isMobile: !!mobile, hasTouch: !!mobile, locale: 'pl-PL', timezoneId: 'Europe/Warsaw', serviceWorkers: 'block' });
     let siec = true;
+    const zapytania = [];
     await ctx.route('https://script.google.com/**', async route => {
       if (!siec) return route.abort('internetdisconnected');
+      try { const q = JSON.parse(route.request().postData()); zapytania.push(q.fn + (q.fn === 'batch' ? ':' + q.arg.ops.length : '')); } catch (e) { /* nie JSON */ }
       const out = env.api.doPost({ postData: { contents: route.request().postData() } }).getContent();
       await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: out });
     });
@@ -55,7 +57,7 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
       ok(r.szer <= r.okno, `${width}px ${gdzie}: strona wystaje w bok (${r.szer} > ${r.okno})`);
       if (mobile) ok(r.za.length === 0, `${width}px ${gdzie}: za małe cele dotykowe: ${r.za.join(' | ')}`);
     };
-    return { env, ctx, page, klucz, zrzut, uklad, siec: v => { siec = v; }, wiersze: () => env.wiersze('Dziennik') };
+    return { env, ctx, page, klucz, zrzut, uklad, zapytania, siec: v => { siec = v; }, wiersze: () => env.wiersze('Dziennik') };
   }
   async function polacz(s) {
     await s.page.goto(base);
@@ -412,6 +414,45 @@ const dzis = (() => { const d = new Date(); return d.getFullYear() + '-' + Strin
     await page.goto(base + '?pora=rano&d=' + L.plus(dzis, -2));
     await page.waitForSelector('.card.day');
     ok((await page.textContent('.card.day h2')).includes(L.dataPl(L.plus(dzis, -2))), 'link ze starszego przypomnienia otwiera Historię tego dnia');
+    await s.ctx.close();
+  }
+
+  /* ---------- v2.2: kolejka idzie naraz, także przy chowaniu aplikacji ---------- */
+  {
+    const s = await sesja(390, 844, true), page = s.page;
+    const czysto = () => page.waitForFunction(() => JSON.parse(localStorage.getItem('zdrowie.outbox') || '[]').length === 0 && !document.body.classList.contains('syncing'));
+    await polacz(s); await czysto();
+    // bez sieci: trzy odhaczenia i cofnięcie czekają; po powrocie sieci idą jednym zapytaniem, w kolejności
+    s.siec(false); await s.ctx.setOffline(true);
+    const n0 = s.wiersze().length;
+    for (let i = 0; i < 3; i++) { await page.click('.pora .item.st-do .it-main'); await page.waitForTimeout(150); }
+    await page.evaluate(() => { const o = JSON.parse(localStorage.getItem('zdrowie.outbox')); Rdzen.outbox.add('undoDose', { ids: ['K' + o[2].cid + '-0'] }, 'Cofnięcie'); });
+    s.zapytania.length = 0;
+    s.siec(true); await s.ctx.setOffline(false);
+    await page.evaluate(() => Rdzen.outbox.flush()); await czysto();
+    ok(s.zapytania.filter(f => f.startsWith('batch') || f === 'logDose' || f === 'undoDose').join() === 'batch:4', 'po powrocie sieci cała kolejka jednym zapytaniem: ' + s.zapytania.join());
+    ok(s.wiersze().length === n0 + 3 && s.wiersze().filter(w => w['Stan'] === 'cofnięty').length === 1, 'kolejność zachowana: trzy wpisy, trzeci cofnięty');
+    // chowanie aplikacji: kolejka wychodzi od razu (keepalive), nawet gdy zwykła wysyłka jeszcze nie ruszyła
+    const n1 = s.wiersze().length;
+    await page.evaluate(() => { Rdzen.outbox._busy = true; });              // jak uśpiona strona: zwykła wysyłka stoi
+    await page.click('.pora .item.st-do .it-main');
+    s.zapytania.length = 0;
+    await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForFunction(() => true); await page.waitForTimeout(500);
+    ok(s.zapytania.join() === 'batch:1' && s.wiersze().length === n1 + 1, 'przy chowaniu aplikacji wpis od razu w arkuszu: ' + s.zapytania.join());
+    await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); Rdzen.outbox._busy = false; Rdzen.outbox.flush(); });
+    await czysto();
+    ok(s.wiersze().length === n1 + 1, 'po powrocie: kolejka potwierdzona, bez dubla');
+    // wpis, który za długo czeka, widać na ekranie Dziś (skrypt nieosiągalny, telefon „online”)
+    s.siec(false);
+    await page.click('.pora .item.st-do .it-main');
+    await page.evaluate(() => { const o = JSON.parse(localStorage.getItem('zdrowie.outbox')); o.forEach(x => { x.at -= 5 * 60000; }); localStorage.setItem('zdrowie.outbox', JSON.stringify(o)); });
+    await page.click('#tabbar [data-tab="historia"]'); await page.click('#tabbar [data-tab="dzis"]');
+    ok((await page.textContent('.alerts')).includes('Czeka na wysłanie: 1'), 'informacja o wpisach czekających w telefonie');
+    s.siec(true);
+    await page.click('[data-flush]'); await czysto();
+    await page.click('#tabbar [data-tab="historia"]'); await page.click('#tabbar [data-tab="dzis"]');
+    ok(!(await page.$('[data-flush]')), '„Wyślij teraz” wysyła i informacja znika');
     await s.ctx.close();
   }
 

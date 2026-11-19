@@ -111,28 +111,82 @@
     /** Słuchacz: fn({ sent: [{item, res}], failed: [{item, error}], model }) po każdej wysyłce. */
     onChange(fn) { outboxListeners.push(fn); },
     _busy: false, _timer: null,
+    /**
+     * Wysyłka kolejki. Ze skryptem 2.2+ odhaczenia i cofnięcia idą razem jednym zapytaniem („batch”, w kolejności),
+     * inne operacje pojedynczo. Skrypt zapisuje każde odhaczenie tylko raz (clientId), więc ponowienie jest bezpieczne.
+     */
     async flush() {
       if (outbox._busy || navigator.onLine === false || !getConn()) return;
       const todo = outbox.list().filter(x => !x.error);
       if (!todo.length) return;
       outbox._busy = true; document.body.classList.add('syncing');
-      const sent = [], failed = []; let model = null;
+      const sent = [], failed = []; let model = null, przerwane = false;
       try {
-        for (const it of todo) {
+        let i = 0;
+        while (i < todo.length) {
+          const grupa = [];
+          if (zbiorczo()) while (i + grupa.length < todo.length && ZBIORCZE[todo[i + grupa.length].fn] && grupa.length < 50) grupa.push(todo[i + grupa.length]);
+          if (grupa.length > 1) {
+            let r;
+            try { r = await api('batch', { ops: grupa.map(it => ({ fn: it.fn, arg: it.arg })) }); } catch (err) { if (err.auth) grupa.forEach(it => failed.push({ item: it, error: err.message })); przerwane = true; break; }   // brak sieci – później
+            if (!(r && r.ok && Array.isArray(r.results))) { outbox._bezZbiorczych = true; continue; }   // skrypt bez „batch”: pojedynczo
+            if (r.model) model = r.model;
+            const now = outbox.list(), wyslane = {};
+            grupa.forEach((it, k) => {
+              const res = r.results[k] || {};
+              if (res.ok) { wyslane[it.cid] = true; sent.push({ item: it, res: res }); return; }
+              const x = now.find(y => y.cid === it.cid);
+              if (x) x.error = res.error || 'Nie udało się zapisać.';
+              failed.push({ item: it, error: x ? x.error : '' });
+            });
+            outbox.save(now.filter(x => !wyslane[x.cid]));
+            i += grupa.length;
+            continue;
+          }
+          const it = todo[i];
           let r;
-          try { r = await api(it.fn, it.arg); } catch (err) { if (err.auth) failed.push({ item: it, error: err.message }); break; }   // brak sieci – później
+          try { r = await api(it.fn, it.arg); } catch (err) { if (err.auth) failed.push({ item: it, error: err.message }); przerwane = true; break; }   // brak sieci – później
           const now = outbox.list();
           if (r && r.ok) { outbox.save(now.filter(x => x.cid !== it.cid)); if (r.model) model = r.model; sent.push({ item: it, res: r }); }
           else { const x = now.find(y => y.cid === it.cid); if (x) { x.error = (r && r.error) || 'Nie udało się zapisać.'; outbox.save(now); } failed.push({ item: it, error: x ? x.error : '' }); }
+          i++;
         }
       } finally { outbox._busy = false; document.body.classList.remove('syncing'); }
       outboxListeners.forEach(f => { try { f({ sent, failed, model }); } catch (e) { /* słuchacz nie psuje kolejki */ } });
       clearTimeout(outbox._timer);
-      if (outbox.list().some(x => !x.error)) outbox._timer = setTimeout(outbox.flush, 60000);
+      // dodane w trakcie wysyłki idą od razu; po błędzie sieci – za 30 sekund
+      if (outbox.list().some(x => !x.error)) outbox._timer = setTimeout(outbox.flush, przerwane ? 30000 : 0);
+    },
+    /**
+     * Przy chowaniu aplikacji (telefon usypia stronę): cała kolejka idzie jednym zapytaniem „keepalive”,
+     * które przeglądarka dokończy nawet po zamknięciu strony. Wpisy zostają w kolejce do potwierdzenia
+     * przy następnym otwarciu (wtedy skrypt rozpozna je jako już zapisane).
+     */
+    wyslijPrzyChowaniu() {
+      const conn = getConn();
+      if (!conn || !conn.url || !conn.token || navigator.onLine === false) return;
+      const todo = outbox.list().filter(x => !x.error);
+      if (!todo.length) return;
+      const wyslij = b => { try { fetch(conn.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(b), keepalive: true, credentials: 'omit', cache: 'no-store' }).catch(() => {}); } catch (e) { /* za duże albo bez keepalive */ } };
+      if (zbiorczo()) {
+        const ops = [];
+        for (const it of todo) { if (!ZBIORCZE[it.fn]) break; ops.push({ fn: it.fn, arg: it.arg }); }
+        if (ops.length) wyslij({ token: conn.token, fn: 'batch', arg: { ops: ops } });
+      } else if (todo.every(x => x.fn === 'logDose')) {
+        todo.forEach(it => wyslij({ token: conn.token, fn: it.fn, arg: it.arg }));   // starszy skrypt: same odhaczenia (kolejność nie ma znaczenia)
+      }
     }
   };
+  const ZBIORCZE = { logDose: true, undoDose: true };
+  /** Czy skrypt zna „batch” (od wersji 2.2). Wersję skryptu znamy z ostatniego modelu w pamięci przeglądarki. */
+  function zbiorczo() {
+    if (outbox._bezZbiorczych) return false;
+    const c = read(CACHE), v = String(c && c.model && c.model.version || '').split('.').map(Number);
+    return v[0] > 2 || (v[0] === 2 && v[1] >= 2);
+  }
   window.addEventListener('online', () => outbox.flush());
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') outbox.flush(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') outbox.flush(); else outbox.wyslijPrzyChowaniu(); });
+  window.addEventListener('pagehide', () => outbox.wyslijPrzyChowaniu());
 
   /* ================= panel „Urządzenia” ================= */
   /*

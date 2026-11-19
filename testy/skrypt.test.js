@@ -38,7 +38,7 @@ test('dostęp: bez klucza i z błędnym kluczem nic; klucz → przepustka; parow
   assert.equal(env.post({ key: 'zly-klucz', fn: 'refreshData' }).auth, true);
   const call = env.polacz('Telefon');
   const m = call('refreshData');
-  assert.equal(m.version, '2.1'); assert.equal(m.dzis, DZIS);
+  assert.equal(m.version, '2.2'); assert.equal(m.dzis, DZIS);
   assert.equal(m.devices.list.length, 1); assert.ok(m.devices.list[0].current);
   assert.ok(!JSON.stringify(m).includes(env.props.API_KEY));
   const kod = call('pairStart').code;
@@ -153,13 +153,13 @@ test('finishPackage i startPosition', () => {
   assert.match(call('startPosition', { id: 'P7' }).error, /uzupełnij/);
 });
 
-test('przypomnienia: wydarzenia na pory, znikają po odhaczeniu, wyzwalacz co 15 minut, zapas', () => {
+test('przypomnienia: wydarzenia na pory, znikają po odhaczeniu (przy najbliższym wyzwalaczu, co 5 minut), zapas', () => {
   const dane = fikcyjneDane(DZIS);
   dane.opakowania[0].ilosc = 30;                                         // 30 − 16 = 14 → skończy się za tydzień → przypomnienie o zapasie
   const env = nowe({ daneStartowe: dane }), call = env.polacz();
   env.props.REMINDERS = JSON.stringify({ drugie: 0 });                     // bez drugiego przypomnienia (osobny test)
   env.api.wlaczPrzypomnienia();
-  assert.equal(env.wyzwalacze.length, 1); assert.equal(env.wyzwalacze[0].min, 15);
+  assert.equal(env.wyzwalacze.length, 1); assert.equal(env.wyzwalacze[0].min, 5);
   const tytuly = () => env.kalendarz.zdarzenia.slice().sort((a, b) => a.start - b.start).map(e => e.title);
   const dzisiejsze = () => env.kalendarz.zdarzenia.filter(e => L.str(Math.floor((e.start.getTime() + 3600e3) / 864e5)) === DZIS).sort((a, b) => a.start - b.start);
   assert.deepEqual(dzisiejsze().map(e => e.title).sort(), ['🌅 Rano: Testolek, Witamina Fikcyjna', '📦 Testolek: załatw receptę (wystarczy do 21 listopada)', '☀️ W ciągu dnia: Peeling Zmyślony', '🌙 Wieczór: Testolek, Maść Próbna'].sort());
@@ -171,10 +171,13 @@ test('przypomnienia: wydarzenia na pory, znikają po odhaczeniu, wyzwalacz co 15
   // odhaczenie jednej pozycji: tytuł się skraca, wydarzenie zostaje to samo
   const utworzono = env.kalendarz.utworzono;
   call('logDose', { clientId: 'cal00000001', items: [{ data: DZIS, pora: 'rano', pozycja: 'P1', status: 'wzięte' }] });
+  assert.equal(dzisiejsze().filter(e => /Rano/.test(e.title))[0].title, '🌅 Rano: Testolek, Witamina Fikcyjna');   // zapis nie czeka na Kalendarz
+  env.api.odswiezPrzypomnienia();
   assert.equal(dzisiejsze().filter(e => /Rano/.test(e.title))[0].title, '🌅 Rano: Witamina Fikcyjna');
   assert.equal(env.kalendarz.utworzono, utworzono);
   // odhaczenie reszty: wydarzenie znika
   call('logDose', { clientId: 'cal00000002', items: [{ data: DZIS, pora: 'rano', pozycja: 'P3', status: 'wzięte' }] });
+  env.api.odswiezPrzypomnienia();
   assert.ok(!dzisiejsze().some(e => /Rano/.test(e.title)));
   // wyzwalacz bez zmian nie rusza kalendarza
   const przed = JSON.stringify(tytuly());
@@ -182,6 +185,7 @@ test('przypomnienia: wydarzenia na pory, znikają po odhaczeniu, wyzwalacz co 15
   assert.equal(JSON.stringify(tytuly()), przed); assert.equal(env.kalendarz.utworzono, utworzono);
   // cofnięcie przywraca wydarzenie
   call('undoDose', { ids: ['Kcal00000002-0'] });
+  env.api.odswiezPrzypomnienia();
   assert.equal(dzisiejsze().filter(e => /Rano/.test(e.title))[0].title, '🌅 Rano: Witamina Fikcyjna');
   // wyłączenie czyści kalendarz i wyzwalacz
   const r = call('saveReminders', { enabled: false });
@@ -250,6 +254,7 @@ test('v2: drugie przypomnienie i link do aplikacji w wydarzeniu', () => {
   call('saveReminders', { drugie: 30 });
   assert.equal(env.kalendarz.zdarzenia.filter(e => e.start.getDate() === 15 && /Nadal: Rano/.test(e.title))[0].start.getMinutes(), 30);
   call('logDose', { clientId: 'rem20000001', items: [{ data: DZIS, pora: 'rano', pozycja: 'P1', status: 'wzięte' }, { data: DZIS, pora: 'rano', pozycja: 'P3', status: 'wzięte' }] });
+  env.api.odswiezPrzypomnienia();
   assert.ok(!env.kalendarz.zdarzenia.some(e => e.start.getDate() === 15 && /Rano/.test(e.title)));
   const r = call('saveReminders', { drugie: 0 });
   assert.equal(r.model.prefs.reminders.drugie, 0); assert.ok(!env.kalendarz.zdarzenia.some(e => /Nadal/.test(e.title)));
@@ -348,4 +353,34 @@ test('v2: zakończenie pozycji, godziny pór', () => {
   assert.deepEqual(r.model.pory.map(p => p.nazwa + ' ' + p.godzina + ' ' + p.weekend), ['rano 07:15 ', 'w ciągu dnia 13:00 13:00', 'wieczór 21:00 22:30']);
   assert.match(call('savePory', { pory: [{ nazwa: 'noc', godzina: '23:00' }] }).error, /Nie ma pory/);
   assert.match(call('savePory', { pory: [{ nazwa: 'rano', godzina: '25:99' }] }).error, /Niepoprawna godzina/);
+});
+
+test('batch: kolejka z telefonu jednym zapytaniem, w kolejności, bez dublowania; błąd jednej operacji nie psuje reszty', () => {
+  const env = nowe(), call = env.polacz('Telefon');
+  const przed = env.wiersze('Dziennik').length;
+  const ops = [
+    { fn: 'logDose', arg: { clientId: 'kol0000001a', items: [{ data: DZIS, pora: 'rano', pozycja: 'P1', status: 'wzięte', ilosc: 1, godz: '07:20' }] } },
+    { fn: 'logDose', arg: { clientId: 'kol0000002b', items: [{ data: DZIS, pora: 'rano', pozycja: 'P3', status: 'wzięte', ilosc: 2, godz: '07:21' }] } },
+    { fn: 'undoDose', arg: { clientId: 'kol0000003c', ids: ['Kkol0000002b-0'] } },
+    { fn: 'logDose', arg: { clientId: 'kol0000004d', items: [{ data: DZIS, pora: 'rano', pozycja: 'NIEMA', status: 'wzięte' }] } },
+    { fn: 'finishPackage', arg: { id: 'O1' } }
+  ];
+  let r = call('batch', { ops: ops });
+  assert.ok(r.ok); assert.equal(r.results.length, 5);
+  assert.deepEqual(r.results.map(x => x.ok), [true, true, true, false, false]);
+  assert.equal(r.results[2].undone, 1);
+  assert.equal(env.wiersze('Dziennik').length, przed + 2);
+  assert.ok(r.model.dziennik.wpisy.some(x => x.id === 'Kkol0000001a-0') && !r.model.dziennik.wpisy.some(x => x.id === 'Kkol0000002b-0'));
+  r = call('batch', { ops: ops.slice(0, 3) });                         // ponowienie (np. po wysyłce przy chowaniu aplikacji)
+  assert.ok(r.ok); assert.equal(env.wiersze('Dziennik').length, przed + 2);
+  assert.deepEqual(r.results.map(x => x.saved), [0, 0, undefined]);
+  assert.equal(call('batch', { ops: [] }).ok, false);
+});
+
+test('v2.2: stary wyzwalacz co 15 minut sam zamienia się na co 5 minut', () => {
+  const env = nowe();
+  env.api.wlaczPrzypomnienia();
+  delete env.props.TRIGGER_V; env.wyzwalacze[0].min = 15;                 // stan po wklejeniu nowego skryptu na stare wdrożenie
+  env.api.odswiezPrzypomnienia();
+  assert.equal(env.wyzwalacze.length, 1); assert.equal(env.wyzwalacze[0].min, 5);
 });

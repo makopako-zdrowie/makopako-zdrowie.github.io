@@ -17,7 +17,8 @@
  *  - v2: getLog (dziennik z dowolnego okresu: historia i raport), korekta zapasu (status „korekta”),
  *    edycja w aplikacji: savePosition (zmiana dawki/planu = nowa wersja pozycji), endPosition, deletePosition,
  *    saveTherapy, savePory, addPackage; drugie przypomnienie i link do aplikacji w wydarzeniach,
- *  - przypomnienia w Kalendarzu Google: jedno wydarzenie na porę dnia, wyzwalacz co 15 minut.
+ *  - przypomnienia w Kalendarzu Google: jedno wydarzenie na porę dnia, wyzwalacz co 5 minut (zapis nie czeka na Kalendarz),
+ *  - v2.2: „batch” – kilka odhaczeń i cofnięć jednym zapytaniem (kolejka z telefonu).
  *
  * W TYM PLIKU NIE MA DANYCH ZDROWOTNYCH. Dane startowe są w osobnym pliku DaneStartowe.gs (poza repozytorium).
  *
@@ -27,7 +28,7 @@
  ****************************************************************/
 
 const CORE = {
-  VERSION: '2.1',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
+  VERSION: '2.2',             // ta sama liczba główna co CLIENT_VERSION w stronie; strona ostrzega, gdy się różnią
   APP_NAME: 'Zdrowie',
   APP_URL: 'https://makopako-zdrowie.github.io/',   // link w przypomnieniach otwiera aplikację na właściwej porze
   DEVICES_SHEET: 'Urządzenia'
@@ -40,6 +41,7 @@ const ACTIONS = {
   refreshData: function (arg) { return cachedModelJson_(!!(arg && arg.force)); },
   logDose: function (arg) { return logDose(arg); },
   undoDose: function (arg) { return undoDose(arg); },
+  batch: function (arg) { return batch(arg); },
   finishPackage: function (arg) { return finishPackage(arg); },
   startPosition: function (arg) { return startPosition(arg); },
   saveReminders: function (arg) { return saveReminders(arg); },
@@ -1019,8 +1021,8 @@ function buildModel_() {
 
 /** Po zapisie: kalendarz od razu wie, co odhaczone (bez czekania na wyzwalacz). Błąd kalendarza nie psuje zapisu. */
 function afterWrite_() {
-  try { if (remindersPrefs_().enabled) syncReminders_(false); }
-  catch (e) { const r = remindersPrefs_(); r.error = authHint_(e); storeReminders_(r); }
+  // Kalendarz nie spowalnia zapisu: przypomnienia odświeża wyzwalacz co 5 minut (odswiezPrzypomnienia).
+  // Wcześniej każde odhaczenie czekało kilkanaście sekund na Kalendarz, a telefon wysyłał wpisy po jednym.
 }
 
 /**
@@ -1028,7 +1030,10 @@ function afterWrite_() {
  * ID wiersza = 'K' + clientId + '-' + numer, więc ponowienie z kolejki offline niczego nie dubluje.
  */
 function logDose(arg) {
-  const res = withLock_(function (ss) {
+  return withLock_(function (ss) { return logDoseCore_(ss, arg); });
+}
+function logDoseCore_(ss, arg) {
+  {
     const items = arg && Array.isArray(arg.items) ? arg.items : [];
     if (!items.length || items.length > 60) throw new Error('Brak wpisów do zapisania.');
     const tD = readTable_(ss, TABS.DZIENNIK), tP = readTable_(ss, TABS.POZYCJE);
@@ -1068,14 +1073,15 @@ function logDose(arg) {
     });
     appendRows_(tD.sh, rows);
     return { saved: rows.length, duplicate: dup };
-  });
-  afterWrite_();
-  return res;
+  }
 }
 
 /** Cofnięcie wpisów: arg = { ids: [...] }. Wiersz zostaje w Dzienniku ze stanem „cofnięty” i nie liczy się nigdzie. */
 function undoDose(arg) {
-  const res = withLock_(function (ss) {
+  return withLock_(function (ss) { return undoDoseCore_(ss, arg); });
+}
+function undoDoseCore_(ss, arg) {
+  {
     const ids = arg && Array.isArray(arg.ids) ? arg.ids.map(String).slice(0, 100) : [];
     const tD = readTable_(ss, TABS.DZIENNIK);
     if (!tD.sh) throw new Error('W arkuszu brakuje zakładki Dziennik.');
@@ -1087,9 +1093,27 @@ function undoDose(arg) {
       n++;
     });
     return { undone: n };
+  }
+}
+
+/**
+ * Kilka odhaczeń i cofnięć naraz, w kolejności z telefonu: arg = { ops: [{ fn: 'logDose'|'undoDose', arg }] }.
+ * Jeden zapis pod blokadą i jeden świeży model. Telefon wysyła tak całą kolejkę (także przy chowaniu aplikacji),
+ * a clientId w każdym odhaczeniu sprawia, że ponowiona wysyłka niczego nie dubluje.
+ */
+function batch(arg) {
+  const ops = arg && Array.isArray(arg.ops) ? arg.ops.slice(0, 100) : [];
+  if (!ops.length) throw new Error('Brak wpisów do zapisania.');
+  return withLock_(function (ss) {
+    const results = ops.map(function (op) {
+      try {
+        if (op && op.fn === 'logDose') return Object.assign({ ok: true }, logDoseCore_(ss, op.arg));
+        if (op && op.fn === 'undoDose') return Object.assign({ ok: true }, undoDoseCore_(ss, op.arg));
+        return { ok: false, error: 'Tej operacji nie da się wysłać zbiorczo.' };
+      } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    });
+    return { results: results };
   });
-  afterWrite_();
-  return res;
 }
 
 /** „Skończyło się”: arg = { id, data, nowe: { ilosc, wazneDo } | null }. Z „nowe” od razu otwiera kolejne opakowanie. */
@@ -1178,7 +1202,8 @@ function saveReminders(arg) {
 
 function setReminderTrigger_(on) {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'odswiezPrzypomnienia') ScriptApp.deleteTrigger(t); });
-  if (on) ScriptApp.newTrigger('odswiezPrzypomnienia').timeBased().everyMinutes(15).create();
+  if (on) ScriptApp.newTrigger('odswiezPrzypomnienia').timeBased().everyMinutes(5).create();
+  PropertiesService.getScriptProperties().setProperty('TRIGGER_V', '5min');
 }
 
 /** Uruchom raz w edytorze (Uruchom → wlaczPrzypomnienia): zatwierdzasz dostęp do Kalendarza, a przypomnienia się włączają. */
@@ -1199,8 +1224,10 @@ function wylaczPrzypomnienia() {
   Logger.log('Przypomnienia wyłączone.');
 }
 
-/** Wywoływane przez wyzwalacz co 15 minut. */
+/** Wywoływane przez wyzwalacz co 5 minut. */
 function odswiezPrzypomnienia() {
+  // stary wyzwalacz (co 15 minut) sam zamienia się na nowy (co 5 minut)
+  try { if (PropertiesService.getScriptProperties().getProperty('TRIGGER_V') !== '5min' && remindersPrefs_().enabled) setReminderTrigger_(true); } catch (e) { /* zostaje stary */ }
   try { syncReminders_(false); } catch (e) { const r = remindersPrefs_(); r.error = authHint_(e); storeReminders_(r); }
 }
 

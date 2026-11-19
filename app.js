@@ -6,7 +6,7 @@
  * widok = dziennik z modelu + wpisy czekające w kolejce (Rdzen.outbox) + wpisy wysłane przed chwilą.
  * Kolejność plików: config.js → rdzen.js → logika.js → app.js → moduly.js. Start (Rdzen.boot) po wczytaniu wszystkich.
  ****************************************************************/
-window.CLIENT_VERSION = '2.1.6';
+window.CLIENT_VERSION = '2.2';
 (function () {
   'use strict';
   const L = Logika, esc = Rdzen.esc;
@@ -191,6 +191,11 @@ window.CLIENT_VERSION = '2.1.6';
       else t = `${n} wystarczy do ${z.dniDoKonca === 0 ? 'dziś' : kon} (zostało ${dawkaTxt(z.p, z.zostalo)}).` + co;
       li.push(`<li><span class="ico ${z.dniDoKonca <= 3 ? 'critical' : 'warning'}" aria-hidden="true">!</span><span>${t} <button type="button" class="linkish" data-finish="${esc(z.opak.id)}">Skończyło się</button></span></li>`);
     });
+    // wpisy, które za długo czekają w telefonie (inne urządzenia ich jeszcze nie widzą)
+    const czeka = Rdzen.outbox.list().filter(x => !x.error);
+    if (czeka.length && Date.now() - Math.min.apply(null, czeka.map(x => x.at || Date.now())) > 90000) {
+      li.push(`<li><span class="ico warning" aria-hidden="true">↑</span><span><b>Czeka na wysłanie: ${czeka.length}.</b> Inne urządzenia jeszcze tego nie widzą. <button type="button" class="linkish" data-flush>Wyślij teraz</button></span></li>`);
+    }
     if ((D.warnings || []).length) li.push(`<li><span class="ico warning" aria-hidden="true">i</span><span>Arkusz wymaga poprawek (${D.warnings.length}). <button type="button" class="linkish" data-tab="ustawienia">Zobacz w Ustawieniach</button></span></li>`);
     return li.length ? `<ul class="alerts">${li.join('')}</ul>` : '';
   }
@@ -674,6 +679,7 @@ window.CLIENT_VERSION = '2.1.6';
       if ((b = e.target.closest('[data-finish]'))) { oknoOpakowania(b.dataset.finish); return; }
       if ((b = e.target.closest('[data-fix]'))) { oknoKorekty(b.dataset.fix); return; }
       if ((b = e.target.closest('[data-add-pack]'))) { const p = ctx.pozMap[b.dataset.addPack]; if (p) oknoNowegoOpakowania(p); return; }
+      if (e.target.closest('[data-flush]')) { Rdzen.outbox.flush(); toast('Wysyłam…'); return; }
       if ((b = e.target.closest('[data-drop]'))) { Rdzen.outbox.remove(b.dataset.drop); render(); return; }
       if ((b = e.target.closest('[data-start]'))) {
         const p = ctx.pozMap[b.dataset.start];
